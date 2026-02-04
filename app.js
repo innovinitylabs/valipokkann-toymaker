@@ -1,6 +1,6 @@
-// Scene setup
+// Scene setup - bright and clean for toy display
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf0f0f0);
+scene.background = new THREE.Color(0xffffff); // Pure white background for maximum brightness
 
 // Camera setup - slight downward angle
 const camera = new THREE.PerspectiveCamera(
@@ -12,26 +12,59 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 8, 12);
 camera.lookAt(0, 0, 0);
 
-// Renderer setup
+// Renderer setup - optimized for bright, vibrant toy display
 const renderer = new THREE.WebGLRenderer({
     canvas: document.getElementById('canvas'),
-    antialias: true
+    antialias: true,
+    alpha: false
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+// Enhanced shadow mapping
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-// Lighting setup - neutral lighting
-const hemisphereLight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 0.6);
-scene.add(hemisphereLight);
+// Tone mapping for vibrant colors and proper exposure
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2; // Slightly brightened
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(5, 10, 5);
-directionalLight.castShadow = true;
-directionalLight.shadow.mapSize.width = 2048;
-directionalLight.shadow.mapSize.height = 2048;
-scene.add(directionalLight);
+// Color space for accurate colors
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+// Professional lighting setup for toy display
+// Ambient light for overall brightness
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+// Key light - main directional light from top-left
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+keyLight.position.set(5, 8, 5);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.width = 2048;
+keyLight.shadow.mapSize.height = 2048;
+keyLight.shadow.camera.near = 0.1;
+keyLight.shadow.camera.far = 50;
+keyLight.shadow.camera.left = -10;
+keyLight.shadow.camera.right = 10;
+keyLight.shadow.camera.top = 10;
+keyLight.shadow.camera.bottom = -10;
+scene.add(keyLight);
+
+// Fill light - softer light from bottom-right to reduce harsh shadows
+const fillLight = new THREE.DirectionalLight(0xddeeff, 0.4);
+fillLight.position.set(-3, 2, -3);
+scene.add(fillLight);
+
+// Rim light - subtle highlight from behind for definition
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+rimLight.position.set(0, 5, -8);
+scene.add(rimLight);
+
+// Optional: Point light for extra sparkle on metallic parts
+const pointLight = new THREE.PointLight(0xffffff, 0.5, 20);
+pointLight.position.set(0, 10, 0);
+scene.add(pointLight);
 
 // GLTF Loader for r128
 const loader = new THREE.GLTFLoader();
