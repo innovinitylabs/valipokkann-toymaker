@@ -129,32 +129,65 @@ function findToyParts(object) {
     console.log('GLTF loaded successfully! Analyzing hierarchy for physics...');
 
     let objectCount = 0;
+    const meshObjects = [];
+
     object.traverse((child) => {
         objectCount++;
-        console.log(`Object ${objectCount}:`, child.name, '- Type:', child.type, '- Position:', child.position);
+        console.log(`Object ${objectCount}:`, child.name || 'unnamed', '- Type:', child.type, '- Position:', child.position);
 
-        // Look for common naming patterns for physics parts
-        const name = child.name.toLowerCase();
+        // Collect all mesh objects for fallback assignment
+        if (child.isMesh) {
+            meshObjects.push(child);
+        }
 
-        if (name.includes('body') || name.includes('torso') || name.includes('main')) {
+        // Look for common naming patterns for physics parts (expanded patterns)
+        const name = (child.name || '').toLowerCase();
+
+        if (name.includes('body') || name.includes('torso') || name.includes('main') || name.includes('stick') || name.includes('handle')) {
             // This will be our fixed body (the stick/handle)
             console.log('🎯 Found body/torso:', child.name);
-        } else if ((name.includes('arm_l') || name.includes('left_arm') || name.includes('l_arm')) && !name.includes('right')) {
+        } else if (name.includes('arm') && (name.includes('left') || name.includes('l_') || name.includes('_l') || name.includes('L'))) {
             leftArmRef = child;
             console.log('🎯 Found left arm:', child.name);
-        } else if ((name.includes('arm_r') || name.includes('right_arm') || name.includes('r_arm')) && !name.includes('left')) {
+        } else if (name.includes('arm') && (name.includes('right') || name.includes('r_') || name.includes('_r') || name.includes('R'))) {
             rightArmRef = child;
             console.log('🎯 Found right arm:', child.name);
-        } else if ((name.includes('leg_l') || name.includes('left_leg') || name.includes('l_leg')) && !name.includes('right')) {
+        } else if (name.includes('leg') && (name.includes('left') || name.includes('l_') || name.includes('_l') || name.includes('L'))) {
             leftLegRef = child;
             console.log('🎯 Found left leg:', child.name);
-        } else if ((name.includes('leg_r') || name.includes('right_leg') || name.includes('r_leg')) && !name.includes('left')) {
+        } else if (name.includes('leg') && (name.includes('right') || name.includes('r_') || name.includes('_r') || name.includes('R'))) {
             rightLegRef = child;
             console.log('🎯 Found right leg:', child.name);
         }
     });
 
-    console.log(`✅ Total objects in GLTF: ${objectCount}`);
+    // Fallback: Assign physics parts based on position and type if naming didn't work
+    if (!leftArmRef || !rightArmRef || !leftLegRef || !rightLegRef) {
+        console.log('🔍 Name-based detection incomplete, using position-based fallback...');
+
+        // Sort mesh objects by their Y position (higher = arms, lower = legs)
+        meshObjects.sort((a, b) => b.position.y - a.position.y);
+
+        // Assign based on position (this is a heuristic)
+        for (let i = 0; i < meshObjects.length && i < 4; i++) {
+            const obj = meshObjects[i];
+            if (!leftArmRef && obj.position.x < 0 && obj.position.y > 0) {
+                leftArmRef = obj;
+                console.log('🔄 Assigned left arm by position:', obj.name);
+            } else if (!rightArmRef && obj.position.x > 0 && obj.position.y > 0) {
+                rightArmRef = obj;
+                console.log('🔄 Assigned right arm by position:', obj.name);
+            } else if (!leftLegRef && obj.position.x < 0 && obj.position.y < 0) {
+                leftLegRef = obj;
+                console.log('🔄 Assigned left leg by position:', obj.name);
+            } else if (!rightLegRef && obj.position.x > 0 && obj.position.y < 0) {
+                rightLegRef = obj;
+                console.log('🔄 Assigned right leg by position:', obj.name);
+            }
+        }
+    }
+
+    console.log(`✅ Total objects in GLTF: ${objectCount}, Meshes: ${meshObjects.length}`);
     console.log('⚙️ Setting up physics simulation...');
 }
 
