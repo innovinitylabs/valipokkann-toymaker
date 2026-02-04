@@ -1,0 +1,15 @@
+{
+  "name": "threejs-jumping-jack-toy",
+  "version": "1.0.0",
+  "description": "Interactive Three.js jumping jack toy with mouse controls",
+  "main": "app.js",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "dev": "python -m http.server 8000"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "keywords": ["three.js", "webgl", "3d", "interactive", "toy"],
+  "author": "",
+  "license": "MIT"
+}
