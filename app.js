@@ -37,10 +37,7 @@ scene.add(directionalLight);
 const loader = new THREE.GLTFLoader();
 
 // Toy hierarchy references - will be set after GLTF loads
-let toyGroupRef; // Root group of the toy
-let stickObjectRef; // The stick/pole object
-let leftArmRef, rightArmRef; // Arm objects for jumping jack motion
-let leftLegRef, rightLegRef; // Leg objects for jumping jack motion
+let toyGroupRef; // Root group of the toy (used for spinning)
 
 // Load the GLTF model
 loader.load(
@@ -87,72 +84,22 @@ loader.load(
     }
 );
 
-// Find toy parts in the hierarchy
-// The GLTF hierarchy is preserved - no deformation allowed
-// Animation works by rotating Object3D nodes, not modifying mesh geometry
+// Analyze GLTF hierarchy for debugging
+// The toy now spins as a whole object on click - no individual part animations needed
 function findToyParts(object) {
-    console.log('Analyzing GLTF hierarchy...');
-    const allObjects = [];
+    console.log('GLTF loaded successfully! Analyzing hierarchy...');
 
+    let objectCount = 0;
     object.traverse((child) => {
-        allObjects.push(child);
-        console.log('Object found:', child.name, '- Type:', child.type, '- Position:', child.position);
-
-        // Look for common naming patterns - adjust based on actual GLTF
-        const name = child.name.toLowerCase();
-
-        if (name.includes('stick') || name.includes('pole') || name.includes('handle')) {
-            stickObjectRef = child;
-            console.log('✅ Found stick:', child.name);
-        } else if ((name.includes('arm_l') || name.includes('left_arm') || name.includes('arm_left') ||
-                   name.includes('l_arm') || name.includes('arm.l')) && !name.includes('right')) {
-            leftArmRef = child;
-            console.log('✅ Found left arm:', child.name);
-        } else if ((name.includes('arm_r') || name.includes('right_arm') || name.includes('arm_right') ||
-                   name.includes('r_arm') || name.includes('arm.r')) && !name.includes('left')) {
-            rightArmRef = child;
-            console.log('✅ Found right arm:', child.name);
-        } else if ((name.includes('leg_l') || name.includes('left_leg') || name.includes('leg_left') ||
-                   name.includes('l_leg') || name.includes('leg.l')) && !name.includes('right')) {
-            leftLegRef = child;
-            console.log('✅ Found left leg:', child.name);
-        } else if ((name.includes('leg_r') || name.includes('right_leg') || name.includes('leg_right') ||
-                   name.includes('r_leg') || name.includes('leg.r')) && !name.includes('left')) {
-            rightLegRef = child;
-            console.log('✅ Found right leg:', child.name);
-        }
+        objectCount++;
+        console.log(`Object ${objectCount}:`, child.name, '- Type:', child.type);
     });
 
-    // Fallback: try to identify by position/type if names don't match
-    if (!stickObjectRef) {
-        // Look for tall vertical objects (likely the stick)
-        const verticalObjects = allObjects.filter(obj =>
-            obj.type === 'Object3D' &&
-            Math.abs(obj.position.y) > Math.abs(obj.position.x) &&
-            Math.abs(obj.position.y) > Math.abs(obj.position.z)
-        );
-        if (verticalObjects.length > 0) {
-            stickObjectRef = verticalObjects[0];
-            console.log('🔍 Inferred stick by position:', stickObjectRef.name);
-        }
-    }
-
-    console.log('🎯 Final toy parts found:', {
-        stick: stickObjectRef?.name || 'NOT FOUND',
-        leftArm: leftArmRef?.name || 'NOT FOUND',
-        rightArm: rightArmRef?.name || 'NOT FOUND',
-        leftLeg: leftLegRef?.name || 'NOT FOUND',
-        rightLeg: rightLegRef?.name || 'NOT FOUND'
-    });
-
-    console.log('💡 Tip: Press H to see full hierarchy, then update findToyParts() with correct names');
+    console.log(`✅ Total objects in GLTF: ${objectCount}`);
+    console.log('🎮 Controls: Move mouse to tilt toy, click to spin on vertical axis');
 }
 
-// Animation variables
-let stickRotationAngle = 0; // Current stick rotation angle around Z axis
-let targetStickRotation = 0; // Target rotation for smooth transitions
-let isAnimating = false; // Whether stick is currently animating
-const animationSpeed = 0.08; // Speed of rotation animation (slightly faster)
+// Animation variables (removed - using direct spin animation instead)
 
 // Mouse interaction variables
 const mouse = new THREE.Vector2();
@@ -162,14 +109,11 @@ let mousePressed = false;
 const maxToyTiltX = Math.PI / 6; // ±30 degrees X tilt
 const maxToyTiltY = Math.PI / 8; // ±22.5 degrees Y tilt
 
-// Jumping jack animation parameters
-const ARM_ROTATION_LIMIT = Math.PI / 6; // ±30 degrees
-const LEG_ROTATION_LIMIT = Math.PI / 7.2; // ±25 degrees
-const ANIMATION_FREQUENCY = 0.03; // How fast the jumping jack motion cycles
+// Animation constants for spin effect
+const SPIN_DURATION = 2000; // 2 seconds for spin animation
 
-// Toy references are already initialized above
-console.log('Toy created successfully');
-console.log('Toy hierarchy created with procedural jumping jack');
+// Toy references are initialized when GLTF loads
+console.log('Three.js jumping jack toy initialized');
 
 // Mouse event handlers
 function onMouseMove(event) {
@@ -183,12 +127,27 @@ function onMouseMove(event) {
 function onMouseDown(event) {
     mousePressed = true;
 
-    if (stickObjectRef) {
-        // Apply random rotation around stick's local Z axis
-        // This simulates the tactile feel of spinning a wooden jumping jack toy
+    if (toyGroupRef) {
+        // Apply random rotation around the toy's vertical Y axis
+        // This makes the entire jumping jack toy spin when clicked
         const randomAngle = (Math.random() - 0.5) * Math.PI * 4; // ±720° (2 full rotations)
-        targetStickRotation += randomAngle;
-        isAnimating = true;
+        const startTime = Date.now();
+
+        // Animate the spin over time with smooth easing
+        function animateSpin() {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / SPIN_DURATION, 1);
+            const easeProgress = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+
+            const currentAngle = randomAngle * easeProgress;
+            toyGroupRef.rotation.y = currentAngle;
+
+            if (progress < 1) {
+                requestAnimationFrame(animateSpin);
+            }
+        }
+
+        animateSpin();
     }
 }
 
@@ -232,67 +191,11 @@ function updateToyInteraction() {
     }
 }
 
-// Update jumping jack animation - driven by stick rotation
-function updateJumpingJack() {
-    if (!stickObjectRef) return;
-
-    // Smooth rotation towards target (only when animating from click)
-    if (isAnimating) {
-        const rotationDiff = targetStickRotation - stickRotationAngle;
-        stickRotationAngle += rotationDiff * animationSpeed;
-
-        // Apply rotation to stick around its local Z axis
-        stickObjectRef.rotation.z = stickRotationAngle;
-
-        // Check if animation is complete (prevent floating point drift)
-        if (Math.abs(rotationDiff) < 0.001) {
-            stickRotationAngle = targetStickRotation; // Snap to exact value
-            isAnimating = false;
-        }
-    }
-
-    // HIERARCHY-BASED ANIMATION LOGIC:
-    // ================================
-    // The jumping jack motion is created entirely through Object3D.rotation
-    // No mesh deformation, skinning, or morph targets are used
-    //
-    // Animation principle:
-    // 1. Stick rotation (Z-axis) drives the entire motion cycle
-    // 2. Sine waves create smooth in/out limb movement
-    // 3. Arms and legs are mirrored for realistic toy motion
-    // 4. Phase offset between arms and legs creates the "jumping jack" effect
-    //
-    // Visual result: As stick rotates, limbs move in coordinated patterns
-    // that mimic a traditional wooden jumping jack toy
-
-    const time = stickRotationAngle * ANIMATION_FREQUENCY;
-
-    // Arms: Mirrored rotation around Z-axis (left/right symmetry)
-    // When stick rotates clockwise, left arm extends outward, right arm folds inward
-    const armAngle = Math.sin(time) * ARM_ROTATION_LIMIT;
-    if (leftArmRef) {
-        leftArmRef.rotation.z = Math.PI / 6 + armAngle; // Base pose + animation
-    }
-    if (rightArmRef) {
-        rightArmRef.rotation.z = -Math.PI / 6 - armAngle; // Mirrored motion
-    }
-
-    // Legs: Opposite phase to arms (180° offset) for jumping jack motion
-    // Creates the characteristic "spread legs, close arms" pattern
-    const legAngle = Math.sin(time + Math.PI) * LEG_ROTATION_LIMIT;
-    if (leftLegRef) {
-        leftLegRef.rotation.z = -Math.PI / 8 + legAngle; // Opposite phase to arms
-    }
-    if (rightLegRef) {
-        rightLegRef.rotation.z = Math.PI / 8 - legAngle; // Mirrored motion
-    }
-}
+// Spin animation is handled directly in onMouseDown with requestAnimationFrame
 
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
-
-    updateJumpingJack();
 
     renderer.render(scene, camera);
 }
