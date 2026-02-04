@@ -213,7 +213,7 @@ function onMouseWheel(event) {
 
 // Update toy interaction based on mouse position
 function updateToyInteraction() {
-    if (!toyGroupRef || !stickObjectRef) return;
+    if (!toyGroupRef) return;
 
     // Map mouse position to subtle toy rotations for tactile feel
     // Mouse X (-1 to 1) maps to toy Y rotation (side-to-side tilt)
@@ -226,25 +226,6 @@ function updateToyInteraction() {
     // Apply subtle rotations to entire toy for realistic physics feel
     toyGroupRef.rotation.y = toyRotationY;
     toyGroupRef.rotation.x = toyRotationX;
-
-    // Move stick to follow mouse cursor in screen space
-    // This creates the illusion that the bottom of the stick is attached to the cursor
-    if (stickObjectRef) {
-        // Get the stick's base position in world space (assuming it's the bottom)
-        const stickBasePos = new THREE.Vector3(0, -1, 0); // Local position at bottom of stick
-        stickObjectRef.localToWorld(stickBasePos);
-
-        // Convert mouse position to world coordinates at the stick's base depth
-        const mouseWorldPos = new THREE.Vector3(mouse.x, mouse.y, 0.5);
-        mouseWorldPos.unproject(camera);
-
-        // Calculate the offset needed to move stick base to mouse position
-        const offset = mouseWorldPos.clone().sub(stickBasePos);
-
-        // Apply offset to stick position (smooth following)
-        const lerpFactor = 0.15; // Smooth following factor
-        stickObjectRef.position.lerp(stickObjectRef.position.clone().add(offset), lerpFactor);
-    }
 }
 
 // Spin animation is handled directly in onMouseDown with requestAnimationFrame
