@@ -71,6 +71,8 @@ const loader = new THREE.GLTFLoader();
 
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy (used for spinning)
+let leftArmRef, rightArmRef; // Arm objects for jumping jack motion
+let leftLegRef, rightLegRef; // Leg objects for jumping jack motion
 
 // Physics bodies and constraints
 let bodyBody, leftArmBody, rightArmBody, leftLegBody, rightLegBody;
@@ -109,15 +111,8 @@ loader.load(
         // Find toy parts in the hierarchy - this will need to be adjusted based on actual GLTF structure
         findToyParts(toyGroupRef);
 
-        // Check if we found any parts before setting up physics
-        const hasAnyParts = leftArmRef || rightArmRef || leftLegRef || rightLegRef;
-        if (hasAnyParts) {
-            console.log('🔧 Found GLTF parts, setting up physics...');
-            setupPhysicsBodies();
-        } else {
-            console.log('⚠️ No GLTF parts found, skipping physics setup');
-            console.log('💡 Check that your GLTF file has objects named: body main, left_arm, right_arm, left_leg, right_leg');
-        }
+        // Set up physics bodies and constraints
+        setupPhysicsBodies();
 
         console.log('GLTF loaded successfully');
         console.log('Toy hierarchy:', toyGroupRef);
@@ -241,8 +236,16 @@ function setupPhysicsBodies() {
             leftArm: !!leftArmRef,
             rightArm: !!rightArmRef,
             leftLeg: !!leftLegRef,
-            rightLeg: !!rightLegRef
+            rightLeg: !!rightLegRef,
+            leftArmRef: leftArmRef,
+            rightArmRef: rightArmRef
         });
+
+        // Debug: Check if variables are actually defined
+        if (typeof leftArmRef === 'undefined') {
+            console.error('❌ leftArmRef is undefined!');
+            return;
+        }
 
         // Create physics bodies for each part
         // Main body (stick/handle) - fixed in place
