@@ -134,7 +134,7 @@ loader.load(
 // Analyze GLTF hierarchy and identify physics parts
 function findToyParts(object) {
     console.log('GLTF loaded successfully! Analyzing hierarchy for physics...');
-    console.log('🔍 Looking for these exact names: "body main", "left_arm", "right_arm", "left_leg", "right_leg"');
+    console.log('🔍 Looking for these actual GLTF names: "body_main", "Constraint_left_hand", "Constraint_right_hand", "Constraint_left_leg", "Constraint_right_leg"');
 
     let objectCount = 0;
     const meshObjects = [];
@@ -162,25 +162,25 @@ function findToyParts(object) {
         const originalName = child.name || '';
 
         // Check for exact matches first (highest priority)
-        if (originalName === 'body main') {
+        if (originalName === 'body_main') {
             foundParts.body = true;
-            console.log('🎯 EXACT MATCH: Found "body main"!');
-        } else if (originalName === 'left_arm') {
+            console.log('🎯 EXACT MATCH: Found "body_main"!');
+        } else if (originalName === 'Constraint_left_hand') {
             leftArmRef = child;
             foundParts.leftArm = true;
-            console.log('🎯 EXACT MATCH: Found "left_arm"!');
-        } else if (originalName === 'right_arm') {
+            console.log('🎯 EXACT MATCH: Found "Constraint_left_hand" (left arm)!');
+        } else if (originalName === 'Constraint_right_hand') {
             rightArmRef = child;
             foundParts.rightArm = true;
-            console.log('🎯 EXACT MATCH: Found "right_arm"!');
-        } else if (originalName === 'left_leg') {
+            console.log('🎯 EXACT MATCH: Found "Constraint_right_hand" (right arm)!');
+        } else if (originalName === 'Constraint_left_leg') {
             leftLegRef = child;
             foundParts.leftLeg = true;
-            console.log('🎯 EXACT MATCH: Found "left_leg"!');
-        } else if (originalName === 'right_leg') {
+            console.log('🎯 EXACT MATCH: Found "Constraint_left_leg"!');
+        } else if (originalName === 'Constraint_right_leg') {
             rightLegRef = child;
             foundParts.rightLeg = true;
-            console.log('🎯 EXACT MATCH: Found "right_leg"!');
+            console.log('🎯 EXACT MATCH: Found "Constraint_right_leg"!');
         }
 
         // Fallback: Look for common naming patterns (expanded patterns)
