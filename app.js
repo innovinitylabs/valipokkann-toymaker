@@ -111,6 +111,7 @@ loader.load(
         // Find toy parts in the hierarchy - this will need to be adjusted based on actual GLTF structure
         findToyParts(toyGroupRef);
 
+
         // Set up physics bodies and constraints
         setupPhysicsBodies();
 
@@ -126,9 +127,9 @@ loader.load(
     }
 );
 
-// Analyze GLTF hierarchy and identify physics parts
+// STEP 1: Analyze GLTF hierarchy and identify physics parts
 function findToyParts(object) {
-    console.log('GLTF loaded successfully! Analyzing hierarchy for physics...');
+    console.log('=== GLTF ANALYSIS START ===');
     console.log('🔍 Looking for these actual GLTF names: "body_main", "Constraint_left_hand", "Constraint_right_hand", "Constraint_left_leg", "Constraint_right_leg"');
 
     let objectCount = 0;
@@ -141,96 +142,84 @@ function findToyParts(object) {
         rightLeg: false
     };
 
+    // First pass: list ALL objects
+    console.log('📋 ALL OBJECTS IN GLTF:');
     object.traverse((child) => {
         objectCount++;
         const displayName = child.name || 'unnamed';
-        console.log(`📦 Object ${objectCount}: "${displayName}" - Type: ${child.type}`);
+        console.log(`   ${objectCount}. "${displayName}" (${child.type})`);
 
         // Collect all mesh objects for fallback assignment
         if (child.isMesh) {
             meshObjects.push(child);
-            console.log(`   └─ Position: (${child.position.x.toFixed(2)}, ${child.position.y.toFixed(2)}, ${child.position.z.toFixed(2)})`);
-        }
-
-        // Look for the specific names from the updated GLTF
-        const name = (child.name || '').toLowerCase();
-        const originalName = child.name || '';
-
-        // Check for exact matches first (highest priority)
-        if (originalName === 'body_main') {
-            foundParts.body = true;
-            console.log('🎯 EXACT MATCH: Found "body_main"!');
-        } else if (originalName === 'Constraint_left_hand') {
-            leftArmRef = child;
-            foundParts.leftArm = true;
-            console.log('🎯 EXACT MATCH: Found "Constraint_left_hand" (left arm)!');
-        } else if (originalName === 'Constraint_right_hand') {
-            rightArmRef = child;
-            foundParts.rightArm = true;
-            console.log('🎯 EXACT MATCH: Found "Constraint_right_hand" (right arm)!');
-        } else if (originalName === 'Constraint_left_leg') {
-            leftLegRef = child;
-            foundParts.leftLeg = true;
-            console.log('🎯 EXACT MATCH: Found "Constraint_left_leg"!');
-        } else if (originalName === 'Constraint_right_leg') {
-            rightLegRef = child;
-            foundParts.rightLeg = true;
-            console.log('🎯 EXACT MATCH: Found "Constraint_right_leg"!');
-        }
-
-        // Fallback: Look for common naming patterns (expanded patterns)
-        else if (name.includes('body') || name.includes('torso') || name.includes('main') || name.includes('stick') || name.includes('handle')) {
-            // This will be our fixed body (the stick/handle)
-            console.log('🔍 Found body/torso (pattern):', child.name);
-        } else if (name.includes('arm') && (name.includes('left') || name.includes('l_') || name.includes('_l') || name.includes('L'))) {
-            leftArmRef = child;
-            console.log('🔍 Found left arm (pattern):', child.name);
-        } else if (name.includes('arm') && (name.includes('right') || name.includes('r_') || name.includes('_r') || name.includes('R'))) {
-            rightArmRef = child;
-            console.log('🔍 Found right arm (pattern):', child.name);
-        } else if (name.includes('leg') && (name.includes('left') || name.includes('l_') || name.includes('_l') || name.includes('L'))) {
-            leftLegRef = child;
-            console.log('🔍 Found left leg (pattern):', child.name);
-        } else if (name.includes('leg') && (name.includes('right') || name.includes('r_') || name.includes('_r') || name.includes('R'))) {
-            rightLegRef = child;
-            console.log('🔍 Found right leg (pattern):', child.name);
         }
     });
 
-    // Fallback: Assign physics parts based on position and type if naming didn't work
-    if (!leftArmRef || !rightArmRef || !leftLegRef || !rightLegRef) {
-        console.log('🔍 Name-based detection incomplete, using position-based fallback...');
+    console.log(`\n📊 SUMMARY: ${objectCount} total objects, ${meshObjects.length} meshes`);
+    console.log('🔍 Starting detailed matching...\n');
 
-        // Sort mesh objects by their Y position (higher = arms, lower = legs)
-        meshObjects.sort((a, b) => b.position.y - a.position.y);
+    // Second pass: detailed matching
+    object.traverse((child) => {
+        const originalName = child.name || '';
 
-        // Assign based on position (this is a heuristic)
-        for (let i = 0; i < meshObjects.length && i < 4; i++) {
-            const obj = meshObjects[i];
-            if (!leftArmRef && obj.position.x < 0 && obj.position.y > 0) {
-                leftArmRef = obj;
-                console.log('🔄 Assigned left arm by position:', obj.name);
-            } else if (!rightArmRef && obj.position.x > 0 && obj.position.y > 0) {
-                rightArmRef = obj;
-                console.log('🔄 Assigned right arm by position:', obj.name);
-            } else if (!leftLegRef && obj.position.x < 0 && obj.position.y < 0) {
-                leftLegRef = obj;
-                console.log('🔄 Assigned left leg by position:', obj.name);
-            } else if (!rightLegRef && obj.position.x > 0 && obj.position.y < 0) {
-                rightLegRef = obj;
-                console.log('🔄 Assigned right leg by position:', obj.name);
+        // STEP 2: Check for EXACT matches with expected names
+        if (originalName === 'body_main') {
+            foundParts.body = true;
+            console.log('✅ FOUND: body_main (body)');
+
+        } else if (originalName === 'Constraint_left_hand') {
+            leftArmRef = child;
+            foundParts.leftArm = true;
+            console.log('✅ FOUND: Constraint_left_hand → leftArmRef');
+
+        } else if (originalName === 'Constraint_right_hand') {
+            rightArmRef = child;
+            foundParts.rightArm = true;
+            console.log('✅ FOUND: Constraint_right_hand → rightArmRef');
+
+        } else if (originalName === 'Constraint_left_leg') {
+            leftLegRef = child;
+            foundParts.leftLeg = true;
+            console.log('✅ FOUND: Constraint_left_leg → leftLegRef');
+
+        } else if (originalName === 'Constraint_right_leg') {
+            rightLegRef = child;
+            foundParts.rightLeg = true;
+            console.log('✅ FOUND: Constraint_right_leg → rightLegRef');
+
+        } else {
+            // Log objects that don't match our expected names but might be relevant
+            if (originalName && (originalName.includes('hand') || originalName.includes('arm') ||
+                originalName.includes('leg') || originalName.includes('body'))) {
+                console.log(`⚠️  POTENTIAL MATCH: "${originalName}" (${child.type}) - not in expected list`);
             }
         }
+    });
+
+    // STEP 3: Final validation and summary
+    console.log('\n📋 FINAL DETECTION RESULTS:');
+    console.log(`   Body: ${foundParts.body ? '✅ FOUND' : '❌ MISSING'} (body_main)`);
+    console.log(`   Left Arm: ${foundParts.leftArm ? '✅ FOUND' : '❌ MISSING'} (Constraint_left_hand)`);
+    console.log(`   Right Arm: ${foundParts.rightArm ? '✅ FOUND' : '❌ MISSING'} (Constraint_right_hand)`);
+    console.log(`   Left Leg: ${foundParts.leftLeg ? '✅ FOUND' : '❌ MISSING'} (Constraint_left_leg)`);
+    console.log(`   Right Leg: ${foundParts.rightLeg ? '✅ FOUND' : '❌ MISSING'} (Constraint_right_leg)`);
+
+    // STEP 4: Determine if we have enough parts for physics
+    const requiredParts = [foundParts.leftArm, foundParts.rightArm, foundParts.leftLeg, foundParts.rightLeg];
+    const foundCount = requiredParts.filter(Boolean).length;
+
+    if (foundCount >= 2) { // At least arms or legs for some physics
+        console.log(`\n🎯 PHYSICS READY: Found ${foundCount}/4 parts - proceeding with physics setup`);
+    } else {
+        console.log(`\n⚠️  PHYSICS LIMITED: Only found ${foundCount}/4 parts - some features disabled`);
     }
 
-    console.log(`✅ Total objects in GLTF: ${objectCount}, Meshes: ${meshObjects.length}`);
-    console.log('📋 Detection Summary:', foundParts);
-    console.log('⚙️ Setting up physics simulation...');
 }
 
 // Setup physics bodies and constraints for jumping jack motion
 function setupPhysicsBodies() {
     try {
+
         console.log('🔧 Setting up physics bodies...');
         console.log('Available parts:', {
             leftArm: !!leftArmRef,
