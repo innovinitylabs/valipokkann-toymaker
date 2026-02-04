@@ -145,6 +145,12 @@ const maxToyTiltY = Math.PI / 8; // ±22.5 degrees Y tilt
 // Animation constants for spin effect
 const SPIN_DURATION = 2000; // 2 seconds for spin animation
 
+// Zoom constants
+const ZOOM_SPEED = 0.1; // How fast to zoom
+const MIN_ZOOM_DISTANCE = 5; // Closest zoom distance
+const MAX_ZOOM_DISTANCE = 25; // Farthest zoom distance
+let currentZoomDistance = 12; // Current distance from camera to target (matches initial position)
+
 // Toy references are initialized when GLTF loads
 console.log('Three.js jumping jack toy initialized');
 
@@ -186,6 +192,23 @@ function onMouseDown(event) {
 
 function onMouseUp(event) {
     mousePressed = false;
+}
+
+function onMouseWheel(event) {
+    event.preventDefault();
+
+    // Determine zoom direction (negative deltaY = zoom in, positive = zoom out)
+    const zoomDelta = event.deltaY > 0 ? 1 : -1;
+
+    // Update zoom distance with limits
+    currentZoomDistance += zoomDelta * ZOOM_SPEED;
+    currentZoomDistance = Math.max(MIN_ZOOM_DISTANCE, Math.min(MAX_ZOOM_DISTANCE, currentZoomDistance));
+
+    // Update camera position while maintaining look-at target
+    // Camera is positioned relative to (0,0,0) target
+    const cameraHeight = 8; // Keep the same height for good viewing angle
+    camera.position.set(0, cameraHeight, currentZoomDistance);
+    camera.lookAt(0, 0, 0);
 }
 
 // Update toy interaction based on mouse position
@@ -247,6 +270,7 @@ window.addEventListener('resize', onWindowResize);
 window.addEventListener('mousemove', onMouseMove);
 window.addEventListener('mousedown', onMouseDown);
 window.addEventListener('mouseup', onMouseUp);
+window.addEventListener('wheel', onMouseWheel, { passive: false });
 
 // Start animation
 animate();
