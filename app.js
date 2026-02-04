@@ -109,8 +109,15 @@ loader.load(
         // Find toy parts in the hierarchy - this will need to be adjusted based on actual GLTF structure
         findToyParts(toyGroupRef);
 
-        // Set up physics bodies and constraints
-        setupPhysicsBodies();
+        // Check if we found any parts before setting up physics
+        const hasAnyParts = leftArmRef || rightArmRef || leftLegRef || rightLegRef;
+        if (hasAnyParts) {
+            console.log('🔧 Found GLTF parts, setting up physics...');
+            setupPhysicsBodies();
+        } else {
+            console.log('⚠️ No GLTF parts found, skipping physics setup');
+            console.log('💡 Check that your GLTF file has objects named: body main, left_arm, right_arm, left_leg, right_leg');
+        }
 
         console.log('GLTF loaded successfully');
         console.log('Toy hierarchy:', toyGroupRef);
@@ -127,38 +134,53 @@ loader.load(
 // Analyze GLTF hierarchy and identify physics parts
 function findToyParts(object) {
     console.log('GLTF loaded successfully! Analyzing hierarchy for physics...');
+    console.log('🔍 Looking for these exact names: "body main", "left_arm", "right_arm", "left_leg", "right_leg"');
 
     let objectCount = 0;
     const meshObjects = [];
+    const foundParts = {
+        body: false,
+        leftArm: false,
+        rightArm: false,
+        leftLeg: false,
+        rightLeg: false
+    };
 
     object.traverse((child) => {
         objectCount++;
-        console.log(`Object ${objectCount}:`, child.name || 'unnamed', '- Type:', child.type, '- Position:', child.position);
+        const displayName = child.name || 'unnamed';
+        console.log(`📦 Object ${objectCount}: "${displayName}" - Type: ${child.type}`);
 
         // Collect all mesh objects for fallback assignment
         if (child.isMesh) {
             meshObjects.push(child);
+            console.log(`   └─ Position: (${child.position.x.toFixed(2)}, ${child.position.y.toFixed(2)}, ${child.position.z.toFixed(2)})`);
         }
 
         // Look for the specific names from the updated GLTF
         const name = (child.name || '').toLowerCase();
+        const originalName = child.name || '';
 
         // Check for exact matches first (highest priority)
-        if (name === 'body main') {
-            // This will be our fixed body (the stick/handle)
-            console.log('🎯 Found body main:', child.name);
-        } else if (name === 'left_arm') {
+        if (originalName === 'body main') {
+            foundParts.body = true;
+            console.log('🎯 EXACT MATCH: Found "body main"!');
+        } else if (originalName === 'left_arm') {
             leftArmRef = child;
-            console.log('🎯 Found left_arm:', child.name);
-        } else if (name === 'right_arm') {
+            foundParts.leftArm = true;
+            console.log('🎯 EXACT MATCH: Found "left_arm"!');
+        } else if (originalName === 'right_arm') {
             rightArmRef = child;
-            console.log('🎯 Found right_arm:', child.name);
-        } else if (name === 'left_leg') {
+            foundParts.rightArm = true;
+            console.log('🎯 EXACT MATCH: Found "right_arm"!');
+        } else if (originalName === 'left_leg') {
             leftLegRef = child;
-            console.log('🎯 Found left_leg:', child.name);
-        } else if (name === 'right_leg') {
+            foundParts.leftLeg = true;
+            console.log('🎯 EXACT MATCH: Found "left_leg"!');
+        } else if (originalName === 'right_leg') {
             rightLegRef = child;
-            console.log('🎯 Found right_leg:', child.name);
+            foundParts.rightLeg = true;
+            console.log('🎯 EXACT MATCH: Found "right_leg"!');
         }
 
         // Fallback: Look for common naming patterns (expanded patterns)
@@ -207,6 +229,7 @@ function findToyParts(object) {
     }
 
     console.log(`✅ Total objects in GLTF: ${objectCount}, Meshes: ${meshObjects.length}`);
+    console.log('📋 Detection Summary:', foundParts);
     console.log('⚙️ Setting up physics simulation...');
 }
 
