@@ -140,24 +140,43 @@ function findToyParts(object) {
             meshObjects.push(child);
         }
 
-        // Look for common naming patterns for physics parts (expanded patterns)
+        // Look for the specific names from the updated GLTF
         const name = (child.name || '').toLowerCase();
 
-        if (name.includes('body') || name.includes('torso') || name.includes('main') || name.includes('stick') || name.includes('handle')) {
+        // Check for exact matches first (highest priority)
+        if (name === 'body main') {
             // This will be our fixed body (the stick/handle)
-            console.log('🎯 Found body/torso:', child.name);
+            console.log('🎯 Found body main:', child.name);
+        } else if (name === 'left_arm') {
+            leftArmRef = child;
+            console.log('🎯 Found left_arm:', child.name);
+        } else if (name === 'right_arm') {
+            rightArmRef = child;
+            console.log('🎯 Found right_arm:', child.name);
+        } else if (name === 'left_leg') {
+            leftLegRef = child;
+            console.log('🎯 Found left_leg:', child.name);
+        } else if (name === 'right_leg') {
+            rightLegRef = child;
+            console.log('🎯 Found right_leg:', child.name);
+        }
+
+        // Fallback: Look for common naming patterns (expanded patterns)
+        else if (name.includes('body') || name.includes('torso') || name.includes('main') || name.includes('stick') || name.includes('handle')) {
+            // This will be our fixed body (the stick/handle)
+            console.log('🔍 Found body/torso (pattern):', child.name);
         } else if (name.includes('arm') && (name.includes('left') || name.includes('l_') || name.includes('_l') || name.includes('L'))) {
             leftArmRef = child;
-            console.log('🎯 Found left arm:', child.name);
+            console.log('🔍 Found left arm (pattern):', child.name);
         } else if (name.includes('arm') && (name.includes('right') || name.includes('r_') || name.includes('_r') || name.includes('R'))) {
             rightArmRef = child;
-            console.log('🎯 Found right arm:', child.name);
+            console.log('🔍 Found right arm (pattern):', child.name);
         } else if (name.includes('leg') && (name.includes('left') || name.includes('l_') || name.includes('_l') || name.includes('L'))) {
             leftLegRef = child;
-            console.log('🎯 Found left leg:', child.name);
+            console.log('🔍 Found left leg (pattern):', child.name);
         } else if (name.includes('leg') && (name.includes('right') || name.includes('r_') || name.includes('_r') || name.includes('R'))) {
             rightLegRef = child;
-            console.log('🎯 Found right leg:', child.name);
+            console.log('🔍 Found right leg (pattern):', child.name);
         }
     });
 
