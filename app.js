@@ -160,90 +160,113 @@ function findToyParts(object) {
 
 // Setup physics bodies and constraints for jumping jack motion
 function setupPhysicsBodies() {
-    // Create physics bodies for each part
-    // Main body (stick/handle) - fixed in place
-    bodyBody = new CANNON.Body({ mass: 0 }); // mass: 0 = static/immovable
-    bodyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 1, 0.05)));
-    bodyBody.position.set(0, 0, 0);
-    world.addBody(bodyBody);
+    try {
+        console.log('🔧 Setting up physics bodies...');
 
-    // Left arm - dynamic physics body
-    leftArmBody = new CANNON.Body({ mass: 0.1 });
-    leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
-    if (leftArmRef) {
-        leftArmBody.position.copy(leftArmRef.position);
-    } else {
-        leftArmBody.position.set(-0.3, 0.3, 0);
+        // Create physics bodies for each part
+        // Main body (stick/handle) - fixed in place
+        bodyBody = new CANNON.Body({ mass: 0 }); // mass: 0 = static/immovable
+        bodyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 1, 0.05)));
+        bodyBody.position.set(0, 0, 0);
+        world.addBody(bodyBody);
+
+        // Left arm - dynamic physics body
+        leftArmBody = new CANNON.Body({ mass: 0.1 });
+        leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
+        if (leftArmRef) {
+            // Copy position from GLTF and apply scaling
+            const scaledPos = leftArmRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
+            leftArmBody.position.copy(scaledPos);
+            console.log('Left arm physics position:', scaledPos);
+        } else {
+            leftArmBody.position.set(-0.3, 0.3, 0);
+        }
+        world.addBody(leftArmBody);
+
+        // Right arm - dynamic physics body
+        rightArmBody = new CANNON.Body({ mass: 0.1 });
+        rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
+        if (rightArmRef) {
+            const scaledPos = rightArmRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
+            rightArmBody.position.copy(scaledPos);
+            console.log('Right arm physics position:', scaledPos);
+        } else {
+            rightArmBody.position.set(0.3, 0.3, 0);
+        }
+        world.addBody(rightArmBody);
+
+        // Left leg - dynamic physics body
+        leftLegBody = new CANNON.Body({ mass: 0.15 });
+        leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
+        if (leftLegRef) {
+            const scaledPos = leftLegRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
+            leftLegBody.position.copy(scaledPos);
+            console.log('Left leg physics position:', scaledPos);
+        } else {
+            leftLegBody.position.set(-0.15, -0.6, 0);
+        }
+        world.addBody(leftLegBody);
+
+        // Right leg - dynamic physics body
+        rightLegBody = new CANNON.Body({ mass: 0.15 });
+        rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
+        if (rightLegRef) {
+            const scaledPos = rightLegRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
+            rightLegBody.position.copy(scaledPos);
+            console.log('Right leg physics position:', scaledPos);
+        } else {
+            rightLegBody.position.set(0.15, -0.6, 0);
+        }
+        world.addBody(rightLegBody);
+
+        // Create hinge constraints for jumping jack motion
+        console.log('🔗 Creating physics constraints...');
+
+        // Arms - constrained to swing around Z axis at shoulder height
+        leftArmConstraint = new CANNON.HingeConstraint(bodyBody, leftArmBody, {
+            pivotA: new CANNON.Vec3(-0.05, 0.3, 0),
+            pivotB: new CANNON.Vec3(0, -0.4, 0),
+            axisA: new CANNON.Vec3(0, 0, 1),
+            axisB: new CANNON.Vec3(0, 0, 1)
+        });
+        world.addConstraint(leftArmConstraint);
+
+        rightArmConstraint = new CANNON.HingeConstraint(bodyBody, rightArmBody, {
+            pivotA: new CANNON.Vec3(0.05, 0.3, 0),
+            pivotB: new CANNON.Vec3(0, -0.4, 0),
+            axisA: new CANNON.Vec3(0, 0, 1),
+            axisB: new CANNON.Vec3(0, 0, 1)
+        });
+        world.addConstraint(rightArmConstraint);
+
+        // Legs - constrained to swing around Z axis at hip height
+        leftLegConstraint = new CANNON.HingeConstraint(bodyBody, leftLegBody, {
+            pivotA: new CANNON.Vec3(-0.05, -0.1, 0),
+            pivotB: new CANNON.Vec3(0, 0.5, 0),
+            axisA: new CANNON.Vec3(0, 0, 1),
+            axisB: new CANNON.Vec3(0, 0, 1)
+        });
+        world.addConstraint(leftLegConstraint);
+
+        rightLegConstraint = new CANNON.HingeConstraint(bodyBody, rightLegBody, {
+            pivotA: new CANNON.Vec3(0.05, -0.1, 0),
+            pivotB: new CANNON.Vec3(0, 0.5, 0),
+            axisA: new CANNON.Vec3(0, 0, 1),
+            axisB: new CANNON.Vec3(0, 0, 1)
+        });
+        world.addConstraint(rightLegConstraint);
+
+        console.log('✅ Physics bodies and constraints created successfully');
+        console.log('🎮 Physics jumping jack ready - click to spin!');
+
+    } catch (error) {
+        console.error('❌ Error setting up physics:', error);
+        console.error('Falling back to basic interaction mode');
+
+        // Fallback: simple direct rotation for basic interaction
+        bodyBody = null; // Disable physics mode
+        console.log('🔄 Basic rotation mode enabled - move mouse to tilt, click to spin');
     }
-    world.addBody(leftArmBody);
-
-    // Right arm - dynamic physics body
-    rightArmBody = new CANNON.Body({ mass: 0.1 });
-    rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
-    if (rightArmRef) {
-        rightArmBody.position.copy(rightArmRef.position);
-    } else {
-        rightArmBody.position.set(0.3, 0.3, 0);
-    }
-    world.addBody(rightArmBody);
-
-    // Left leg - dynamic physics body
-    leftLegBody = new CANNON.Body({ mass: 0.15 });
-    leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
-    if (leftLegRef) {
-        leftLegBody.position.copy(leftLegRef.position);
-    } else {
-        leftLegBody.position.set(-0.15, -0.6, 0);
-    }
-    world.addBody(leftLegBody);
-
-    // Right leg - dynamic physics body
-    rightLegBody = new CANNON.Body({ mass: 0.15 });
-    rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
-    if (rightLegRef) {
-        rightLegBody.position.copy(rightLegRef.position);
-    } else {
-        rightLegBody.position.set(0.15, -0.6, 0);
-    }
-    world.addBody(rightLegBody);
-
-    // Create hinge constraints for jumping jack motion
-    // Arms - constrained to swing around Z axis at shoulder height
-    leftArmConstraint = new CANNON.HingeConstraint(bodyBody, leftArmBody, {
-        pivotA: new CANNON.Vec3(-0.05, 0.3, 0),
-        pivotB: new CANNON.Vec3(0, -0.4, 0),
-        axisA: new CANNON.Vec3(0, 0, 1),
-        axisB: new CANNON.Vec3(0, 0, 1)
-    });
-    world.addConstraint(leftArmConstraint);
-
-    rightArmConstraint = new CANNON.HingeConstraint(bodyBody, rightArmBody, {
-        pivotA: new CANNON.Vec3(0.05, 0.3, 0),
-        pivotB: new CANNON.Vec3(0, -0.4, 0),
-        axisA: new CANNON.Vec3(0, 0, 1),
-        axisB: new CANNON.Vec3(0, 0, 1)
-    });
-    world.addConstraint(rightArmConstraint);
-
-    // Legs - constrained to swing around Z axis at hip height
-    leftLegConstraint = new CANNON.HingeConstraint(bodyBody, leftLegBody, {
-        pivotA: new CANNON.Vec3(-0.05, -0.1, 0),
-        pivotB: new CANNON.Vec3(0, 0.5, 0),
-        axisA: new CANNON.Vec3(0, 0, 1),
-        axisB: new CANNON.Vec3(0, 0, 1)
-    });
-    world.addConstraint(leftLegConstraint);
-
-    rightLegConstraint = new CANNON.HingeConstraint(bodyBody, rightLegBody, {
-        pivotA: new CANNON.Vec3(0.05, -0.1, 0),
-        pivotB: new CANNON.Vec3(0, 0.5, 0),
-        axisA: new CANNON.Vec3(0, 0, 1),
-        axisB: new CANNON.Vec3(0, 0, 1)
-    });
-    world.addConstraint(rightLegConstraint);
-
-    console.log('🎯 Physics bodies and constraints created');
-    console.log('🎮 Physics jumping jack ready - click to spin!');
 }
 
 // Animation variables (removed - using direct spin animation instead)
@@ -285,21 +308,30 @@ function onMouseMove(event) {
 }
 
 function onMouseDown(event) {
-    mousePressed = true;
+    try {
+        mousePressed = true;
 
-    // Apply physics-based spin to all rigid bodies
-    if (bodyBody && leftArmBody && rightArmBody && leftLegBody && rightLegBody) {
-        // Random angular velocity for spinning motion
-        const spinVelocity = (Math.random() - 0.5) * 10; // Random spin speed
+        // Physics mode: Apply physics-based spin to all rigid bodies
+        if (bodyBody && leftArmBody && rightArmBody && leftLegBody && rightLegBody) {
+            // Random angular velocity for spinning motion
+            const spinVelocity = (Math.random() - 0.5) * 10; // Random spin speed
 
-        // Apply angular velocity to all bodies for synchronized spinning
-        bodyBody.angularVelocity.set(0, spinVelocity, 0);
-        leftArmBody.angularVelocity.set(0, spinVelocity, 0);
-        rightArmBody.angularVelocity.set(0, spinVelocity, 0);
-        leftLegBody.angularVelocity.set(0, spinVelocity, 0);
-        rightLegBody.angularVelocity.set(0, spinVelocity, 0);
+            // Apply angular velocity to all bodies for synchronized spinning
+            bodyBody.angularVelocity.set(0, spinVelocity, 0);
+            leftArmBody.angularVelocity.set(0, spinVelocity, 0);
+            rightArmBody.angularVelocity.set(0, spinVelocity, 0);
+            leftLegBody.angularVelocity.set(0, spinVelocity, 0);
+            rightLegBody.angularVelocity.set(0, spinVelocity, 0);
 
-        console.log('🎪 Physics spin initiated - watch the jumping jack motion!');
+            console.log('🎪 Physics spin initiated - watch the jumping jack motion!');
+        } else if (toyGroupRef) {
+            // Fallback mode: Simple direct rotation
+            const randomAngle = (Math.random() - 0.5) * Math.PI * 4;
+            toyGroupRef.rotation.y = randomAngle;
+            console.log('🔄 Basic spin applied');
+        }
+    } catch (error) {
+        console.error('❌ Mouse down error:', error);
     }
 }
 
@@ -326,51 +358,71 @@ function onMouseWheel(event) {
 
 // Update toy interaction based on mouse position
 function updateToyInteraction() {
-    if (!bodyBody) return;
+    try {
+        // Physics mode: Apply physics forces
+        if (bodyBody) {
+            // Apply subtle physics forces based on mouse position for realistic tilting
+            // Mouse X affects side-to-side tilting (torque around Z axis)
+            const tiltForceZ = mouse.x * 2; // Side-to-side force
 
-    // Apply subtle physics forces based on mouse position for realistic tilting
-    // Mouse X affects side-to-side tilting (torque around Z axis)
-    const tiltForceZ = mouse.x * 2; // Side-to-side force
+            // Mouse Y affects forward-backward tilting (torque around X axis)
+            const tiltForceX = mouse.y * 2; // Forward-backward force
 
-    // Mouse Y affects forward-backward tilting (torque around X axis)
-    const tiltForceX = mouse.y * 2; // Forward-backward force
+            // Apply combined torques
+            bodyBody.torque.set(tiltForceX, 0, tiltForceZ);
 
-    // Apply combined torques
-    bodyBody.torque.set(tiltForceX, 0, tiltForceZ);
-
-    // Apply damping to prevent excessive spinning
-    const damping = 0.95;
-    bodyBody.angularVelocity.scale(damping, bodyBody.angularVelocity);
+            // Apply damping to prevent excessive spinning
+            const damping = 0.95;
+            bodyBody.angularVelocity.scale(damping, bodyBody.angularVelocity);
+        } else if (toyGroupRef) {
+            // Fallback mode: Simple direct tilting
+            const toyRotationY = mouse.x * maxToyTiltY;
+            const toyRotationX = mouse.y * maxToyTiltX;
+            toyGroupRef.rotation.y = toyRotationY;
+            toyGroupRef.rotation.x = toyRotationX;
+        }
+    } catch (error) {
+        console.error('❌ Toy interaction error:', error);
+    }
 }
 
 // Spin animation is handled directly in onMouseDown with requestAnimationFrame
 
 // Animation loop
 function animate() {
-    requestAnimationFrame(animate);
+    try {
+        requestAnimationFrame(animate);
 
-    // Update physics simulation
-    world.step(1/60); // 60 FPS physics
+        // Update physics simulation only if bodies exist
+        if (world && bodyBody) {
+            world.step(1/60); // 60 FPS physics
 
-    // Sync Three.js meshes with physics bodies
-    if (leftArmRef && leftArmBody) {
-        leftArmRef.position.copy(leftArmBody.position);
-        leftArmRef.quaternion.copy(leftArmBody.quaternion);
-    }
-    if (rightArmRef && rightArmBody) {
-        rightArmRef.position.copy(rightArmBody.position);
-        rightArmRef.quaternion.copy(rightArmBody.quaternion);
-    }
-    if (leftLegRef && leftLegBody) {
-        leftLegRef.position.copy(leftLegBody.position);
-        leftLegRef.quaternion.copy(leftLegBody.quaternion);
-    }
-    if (rightLegRef && rightLegBody) {
-        rightLegRef.position.copy(rightLegBody.position);
-        rightLegRef.quaternion.copy(rightLegBody.quaternion);
-    }
+            // Sync Three.js meshes with physics bodies
+            if (leftArmRef && leftArmBody) {
+                leftArmRef.position.copy(leftArmBody.position);
+                leftArmRef.quaternion.copy(leftArmBody.quaternion);
+            }
+            if (rightArmRef && rightArmBody) {
+                rightArmRef.position.copy(rightArmBody.position);
+                rightArmRef.quaternion.copy(rightArmBody.quaternion);
+            }
+            if (leftLegRef && leftLegBody) {
+                leftLegRef.position.copy(leftLegBody.position);
+                leftLegRef.quaternion.copy(leftLegBody.quaternion);
+            }
+            if (rightLegRef && rightLegBody) {
+                rightLegRef.position.copy(rightLegBody.position);
+                rightLegRef.quaternion.copy(rightLegBody.quaternion);
+            }
+        }
 
-    renderer.render(scene, camera);
+        renderer.render(scene, camera);
+    } catch (error) {
+        console.error('❌ Animation loop error:', error);
+        // Continue the animation loop despite errors
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
 }
 
 // Handle window resize
