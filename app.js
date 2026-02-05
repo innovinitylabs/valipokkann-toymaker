@@ -271,6 +271,10 @@ function createRigidBodies() {
         // Create rigid body
         const body = new Ammo.btRigidBody(rbInfo);
 
+        // --- FIX 1: Force bodies to stay active ---
+        body.setActivationState(4); // DISABLE_DEACTIVATION
+        body.setSleepingThresholds(0, 0);
+
         // Add to physics world
         physicsWorld.addRigidBody(body);
 
@@ -281,12 +285,64 @@ function createRigidBodies() {
 
     // Create torso/body (heavier, main body)
     rigidBodies.torso = createBoxBody(bodyMainRef, 'torso', 2.0);
+    // --- FIX 2: Add angular + linear damping to torso ---
+    if (rigidBodies.torso) {
+        rigidBodies.torso.setDamping(0.05, 0.01);
+        rigidBodies.torso.setActivationState(4);
+        rigidBodies.torso.setSleepingThresholds(0, 0);
+    }
+
+    // === KINEMATIC STICK (ANCHOR BODY) ===
+    const stickShape = new Ammo.btCylinderShape(
+      new Ammo.btVector3(0.05, 2.0, 0.05)
+    );
+
+    const stickTransform = new Ammo.btTransform();
+    stickTransform.setIdentity();
+    stickTransform.setOrigin(new Ammo.btVector3(0, 0, 0));
+
+    const stickMotionState = new Ammo.btDefaultMotionState(stickTransform);
+
+    const stickInfo = new Ammo.btRigidBodyConstructionInfo(
+      0, // mass = 0 → kinematic
+      stickMotionState,
+      stickShape,
+      new Ammo.btVector3(0, 0, 0)
+    );
+
+    rigidBodies.stick = new Ammo.btRigidBody(stickInfo);
+    rigidBodies.stick.setCollisionFlags(
+      rigidBodies.stick.getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
+    );
+    rigidBodies.stick.setActivationState(4); // DISABLE_DEACTIVATION
+
+    physicsWorld.addRigidBody(rigidBodies.stick);
 
     // Create limbs (lighter)
     rigidBodies.leftArm = createBoxBody(leftArmRef, 'leftArm', 0.5);
+    if (rigidBodies.leftArm) {
+        rigidBodies.leftArm.setDamping(0.05, 0.05);
+        rigidBodies.leftArm.setActivationState(4);
+        rigidBodies.leftArm.setSleepingThresholds(0, 0);
+    }
     rigidBodies.rightArm = createBoxBody(rightArmRef, 'rightArm', 0.5);
+    if (rigidBodies.rightArm) {
+        rigidBodies.rightArm.setDamping(0.05, 0.05);
+        rigidBodies.rightArm.setActivationState(4);
+        rigidBodies.rightArm.setSleepingThresholds(0, 0);
+    }
     rigidBodies.leftLeg = createBoxBody(leftLegRef, 'leftLeg', 0.7);
+    if (rigidBodies.leftLeg) {
+        rigidBodies.leftLeg.setDamping(0.05, 0.05);
+        rigidBodies.leftLeg.setActivationState(4);
+        rigidBodies.leftLeg.setSleepingThresholds(0, 0);
+    }
     rigidBodies.rightLeg = createBoxBody(rightLegRef, 'rightLeg', 0.7);
+    if (rigidBodies.rightLeg) {
+        rigidBodies.rightLeg.setDamping(0.05, 0.05);
+        rigidBodies.rightLeg.setActivationState(4);
+        rigidBodies.rightLeg.setSleepingThresholds(0, 0);
+    }
 
     console.log('✅ All rigid bodies created');
 }
@@ -300,28 +356,20 @@ function createConstraints() {
         return;
     }
 
-    // Helper function to get hinge pivot points (approximate joint locations)
-    function getHingePivot(meshRef, axis = 'x') {
-        if (!meshRef) return new THREE.Vector3(0, 0, 0);
+    // === STICK → TORSO HINGE (MAIN ROTATION AXIS) ===
+    const stickTorsoHinge = new Ammo.btHingeConstraint(
+      rigidBodies.stick,
+      rigidBodies.torso,
+      new Ammo.btVector3(0, 0, 0),   // pivot on stick
+      new Ammo.btVector3(0, 0, 0),   // pivot on torso
+      new Ammo.btVector3(0, 1, 0),   // Y-axis spin
+      new Ammo.btVector3(0, 1, 0),
+      true
+    );
 
-        const bbox = new THREE.Box3().setFromObject(meshRef);
-        const center = bbox.getCenter(new THREE.Vector3());
+    physicsWorld.addConstraint(stickTorsoHinge, false);
 
-        // For arms: pivot at shoulder height, slightly forward/back
-        // For legs: pivot at hip height
-        if (meshRef.name.includes('arm')) {
-            return new THREE.Vector3(center.x, center.y + 0.1, center.z);
-        } else if (meshRef.name.includes('leg')) {
-            return new THREE.Vector3(center.x, center.y - 0.1, center.z);
-        }
-
-        return center;
-    }
-
-    // Get torso center for reference
-    const torsoBbox = new THREE.Box3().setFromObject(bodyMainRef);
-    const torsoCenter = torsoBbox.getCenter(new THREE.Vector3());
-
+    // --- FIX 3: CORRECT HINGE PIVOT SPACE ---
     // Create hinges for each limb
     const limbs = [
         { name: 'leftArm', body: rigidBodies.leftArm, mesh: leftArmRef },
@@ -336,9 +384,32 @@ function createConstraints() {
             return;
         }
 
-        // Get pivot points in world space
-        const pivotA = getHingePivot(mesh); // Pivot on torso
-        const pivotB = getHingePivot(mesh); // Pivot on limb
+        // Get transforms
+        const torsoTransform = new Ammo.btTransform();
+        rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
+        const torsoOrigin = torsoTransform.getOrigin();
+
+        const limbTransform = new Ammo.btTransform();
+        body.getMotionState().getWorldTransform(limbTransform);
+        const limbOrigin = limbTransform.getOrigin();
+
+        // Joint position from Blender origin of limb mesh (in world space)
+        const jointWorld = new THREE.Vector3();
+        mesh.getWorldPosition(jointWorld);
+
+        // Convert world joint → local torso
+        const pivotA = new Ammo.btVector3(
+            jointWorld.x - torsoOrigin.x(),
+            jointWorld.y - torsoOrigin.y(),
+            jointWorld.z - torsoOrigin.z()
+        );
+
+        // Convert world joint → local limb
+        const pivotB = new Ammo.btVector3(
+            jointWorld.x - limbOrigin.x(),
+            jointWorld.y - limbOrigin.y(),
+            jointWorld.z - limbOrigin.z()
+        );
 
         // Hinge axis (Z-axis for side-to-side swing)
         const axisA = new Ammo.btVector3(0, 0, 1);
@@ -348,8 +419,8 @@ function createConstraints() {
         const hinge = new Ammo.btHingeConstraint(
             rigidBodies.torso,
             body,
-            new Ammo.btVector3(pivotA.x, pivotA.y, pivotA.z),
-            new Ammo.btVector3(pivotB.x, pivotB.y, pivotB.z),
+            pivotA,
+            pivotB,
             axisA,
             axisB,
             true // useReferenceFrameA
@@ -404,12 +475,14 @@ function onMouseDown(event) {
     try {
         mousePressed = true;
 
-        // Apply real torque to torso body (around Y-axis for spin)
-        if (rigidBodies.torso && physicsWorld) {
-            const torqueDirection = Math.random() > 0.5 ? 1 : -1;
-            const torque = new Ammo.btVector3(0, torqueDirection * TORQUE_IMPULSE, 0);
-            rigidBodies.torso.applyTorque(torque);
-            console.log(`🔄 Applied torque: ${torqueDirection * TORQUE_IMPULSE} to torso`);
+        // Apply torque to stick, not torso
+        if (rigidBodies.stick) {
+          rigidBodies.stick.activate(true);
+
+          const dir = Math.random() > 0.5 ? 1 : -1;
+          rigidBodies.stick.applyTorqueImpulse(
+            new Ammo.btVector3(0, dir * TORQUE_IMPULSE, 0)
+          );
         }
     } catch (error) {
         console.error('❌ Mouse down error:', error);
@@ -440,17 +513,16 @@ function onMouseWheel(event) {
 // Update toy interaction based on mouse position
 function updateToyInteraction() {
     try {
-        // PHYSICS-BASED TILT: Apply forces/torques instead of direct rotation
-        if (rigidBodies.torso && physicsWorld) {
-            // Mouse X: left/right tilt → torque around Y-axis
-            const leftRightTorque = mouse.x * TILT_FORCE;
+        // Tilt via stick torque
+        if (rigidBodies.stick) {
+          rigidBodies.stick.activate(true);
 
-            // Mouse Y: front/back tilt → torque around X-axis
-            const frontBackTorque = mouse.y * TILT_FORCE;
+          const tx = mouse.y * TILT_FORCE;
+          const tz = -mouse.x * TILT_FORCE;
 
-            // Apply torques to torso for realistic physics-based tilting
-            const torque = new Ammo.btVector3(frontBackTorque, 0, -leftRightTorque);
-            rigidBodies.torso.applyTorque(torque);
+          rigidBodies.stick.applyTorqueImpulse(
+            new Ammo.btVector3(tx, 0, tz)
+          );
         }
     } catch (error) {
         console.error('❌ Toy interaction error:', error);
