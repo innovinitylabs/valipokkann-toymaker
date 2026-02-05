@@ -80,27 +80,33 @@ let toyGroupRef; // Root group of the toy
 let bodyMainRef;
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
-console.log('🔍 Starting Ammo.js loading...');
-console.log('typeof Ammo:', typeof Ammo);
-console.log('window.Ammo:', !!window.Ammo);
+function initializeAmmo() {
+    console.log('🔍 Starting Ammo.js loading...');
+    console.log('typeof Ammo:', typeof Ammo);
+    console.log('window.Ammo:', !!window.Ammo);
 
-if (typeof Ammo === 'undefined') {
-    console.error('❌ CRITICAL: Ammo global not found - script failed to load');
-    return;
+    if (typeof Ammo === 'undefined') {
+        console.error('❌ CRITICAL: Ammo global not found - script failed to load');
+        console.error('💡 Check that ammo_browser.js is loading correctly');
+        return; // This is now inside a function, so it's valid
+    }
+
+    Ammo().then((AmmoLibInstance) => {
+        console.log('✅ Ammo.js loaded successfully');
+        console.log('AmmoLib available:', !!AmmoLibInstance);
+        // Store AmmoLib globally so all functions can access it
+        AmmoLib = AmmoLibInstance;
+        console.log('AmmoLib assigned, btVector3 available:', !!AmmoLib.btVector3);
+        initPhysics();
+        initScene();
+        animate();
+    }).catch((error) => {
+        console.error('❌ Failed to load Ammo.js:', error);
+    });
 }
 
-Ammo().then((AmmoLibInstance) => {
-    console.log('✅ Ammo.js loaded successfully');
-    console.log('AmmoLib available:', !!AmmoLibInstance);
-    // Store AmmoLib globally so all functions can access it
-    AmmoLib = AmmoLibInstance;
-    console.log('AmmoLib assigned, btVector3 available:', !!AmmoLib.btVector3);
-    initPhysics();
-    initScene();
-    animate();
-}).catch((error) => {
-    console.error('❌ Failed to load Ammo.js:', error);
-});
+// Start the initialization
+initializeAmmo();
 
 // Initialize physics world
 function initPhysics() {
