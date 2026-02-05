@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Ammo.js Jumping Jack Toy</title>
     <style>
         body {
@@ -47,7 +50,19 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ammojs@0.0.2/ammo.js?v=20260205"></script>
+    <script src="https://unpkg.com/ammojs@0.0.2/ammo.js?v=20260205-3"></script>
+    <script>
+        // Check if Ammo loaded correctly
+        setTimeout(() => {
+            if (typeof Ammo === 'undefined') {
+                console.error('❌ CRITICAL: Ammo.js failed to load from CDN');
+                console.error('💡 Try: Hard refresh (Ctrl+F5) or clear browser cache');
+                document.body.innerHTML = '<div style="color: red; font-size: 24px; text-align: center; margin-top: 100px;">❌ Ammo.js failed to load<br>Try: Hard refresh (Ctrl+F5) or clear browser cache</div>';
+            } else {
+                console.log('✅ Ammo.js loaded successfully');
+            }
+        }, 1000);
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
