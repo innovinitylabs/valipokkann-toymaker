@@ -75,6 +75,22 @@ let physicsWorld;
 let rigidBodies = {};
 let constraints = {};
 
+// FAIL FAST SAFETY CHECKS
+function validatePhysicsAuthority() {
+    if (rigidBodies.torso && rigidBodies.torso.getInvMass() === 0) {
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso mass === 0 - torso must be dynamic!");
+    }
+}
+
+function safeSetWorldTransform(body, transform) {
+    if (body === rigidBodies.torso) {
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Manual setWorldTransform on torso after constraints created!");
+    }
+    body.getMotionState().setWorldTransform(transform);
+}
+
+console.log("PHYSICS AUTHORITY ACTIVE");
+
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy
 let bodyMainRef;
@@ -204,6 +220,19 @@ function initScene() {
 
             // Find toy parts in the hierarchy
             findToyParts(toyGroupRef);
+
+            // 🔧 FIX: Detach limbs to world space to avoid local/world transform mismatch
+            if (leftArmRef) scene.attach(leftArmRef);
+            if (rightArmRef) scene.attach(rightArmRef);
+            if (leftLegRef) scene.attach(leftLegRef);
+            if (rightLegRef) scene.attach(rightLegRef);
+
+            console.log('✅ Limbs detached to world space:', {
+                leftArm: leftArmRef?.parent === scene,
+                rightArm: rightArmRef?.parent === scene,
+                leftLeg: leftLegRef?.parent === scene,
+                rightLeg: rightLegRef?.parent === scene
+            });
 
             // Create physics bodies (only after GLTF loads and bodyMainRef is found)
             if (bodyMainRef && physicsWorld) {
@@ -521,7 +550,7 @@ function createRigidBodies() {
         const torsoShape = new AmmoLib.btBoxShape(halfExtents);
 
         // Calculate local inertia (mass = 2.0)
-        const mass = 0; // Kinematic for pendulum debugging
+        const mass = 2.0; // Dynamic torso
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         torsoShape.calculateLocalInertia(mass, localInertia);
 
@@ -539,14 +568,16 @@ function createRigidBodies() {
         // Create rigid body
         rigidBodies.torso = new AmmoLib.btRigidBody(rbInfo);
 
-        // Make kinematic (CF_KINEMATIC_OBJECT) - controlled by us, not physics
-        rigidBodies.torso.setCollisionFlags(2); // CF_KINEMATIC_OBJECT
+        // Set activation state - no kinematic flags
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
 
         // Add to physics world
         physicsWorld.addRigidBody(rigidBodies.torso);
 
-        console.log(`✅ Created kinematic torso body (controlled by mouse, mass: ${mass}, size: ${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)})`);
+        // FAIL FAST: Validate physics authority
+        validatePhysicsAuthority();
+
+        console.log(`✅ DYNAMIC TORSO CREATED (mass: ${mass}, size: ${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)})`);
     }
 
     // Create limbs (arms and legs)
@@ -636,59 +667,52 @@ function createConstraints() {
         return;
     }
 
-    // Skip joint Empty and bodyMainRef checks for pendulum-only debugging
-    // if (!jointEmptyRef) {
-    //     console.error('❌ Cannot create constraints - joint Empty not found');
-    //     return;
-    // }
+    if (!jointEmptyRef) {
+        console.error('❌ Cannot create constraints - joint Empty not found');
+        return;
+    }
 
-    // if (!bodyMainRef) {
-    //     console.error('❌ Cannot create constraints - bodyMainRef not found');
-    //     return;
-    // }
+    if (!bodyMainRef) {
+        console.error('❌ Cannot create constraints - bodyMainRef not found');
+        return;
+    }
 
-    // STEP 5: ANCHOR ↔ TORSO HINGE WITH MOTOR - DISABLED FOR DEBUGGING
-    // // pivotA = anchor origin (0, 0, 0) - anchor is already aligned to joint Empty
-    // // pivotB = torso local pivot computed from Empty world position
-    // // axis = vertical (Y)
+    // STEP 5: ANCHOR ↔ TORSO HINGE
+    // pivotA = (0,0,0) in anchor local space
+    // pivotB = jointWorld − torsoWorldOrigin
+    // axis = Y axis
 
-    // // STEP 4: COMPUTE TORSO LOCAL PIVOT FROM EMPTY
-    // // Physics body is at GLTF position, pivot is offset to Empty position
-    // const jointWorld = new THREE.Vector3();
-    // jointEmptyRef.getWorldPosition(jointWorld);
+    // Compute jointWorld from Blender Empty
+    const jointWorld = new THREE.Vector3();
+    jointEmptyRef.getWorldPosition(jointWorld);
 
-    // // Get torso physics body world position (should be GLTF position)
-    // const torsoTransform = new AmmoLib.btTransform();
-    // rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
-    // const torsoOrigin = torsoTransform.getOrigin();
+    // Get torso physics body world position
+    const torsoTransform = new AmmoLib.btTransform();
+    rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
+    const torsoOrigin = torsoTransform.getOrigin();
 
-    // // Pivot is the offset from physics body to Empty (joint)
-    // const pivotB = new AmmoLib.btVector3(
-    //     jointWorld.x - torsoOrigin.x(),
-    //     jointWorld.y - torsoOrigin.y(),
-    //     jointWorld.z - torsoOrigin.z()
-    // );
+    // Compute pivotB = jointWorld − torsoWorldOrigin
+    const pivotB = new AmmoLib.btVector3(
+        jointWorld.x - torsoOrigin.x(),
+        jointWorld.y - torsoOrigin.y(),
+        jointWorld.z - torsoOrigin.z()
+    );
 
-    // // Create hinge constraint
-    // constraints.spinHinge = new AmmoLib.btHingeConstraint(
-    //     rigidBodies.anchor,
-    //     rigidBodies.torso,
-    //     new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin (already at joint)
-    //     pivotB,                             // pivotB: torso local pivot from Empty
-    //     new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
-    //     new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
-    //     true                                // useReferenceFrameA
-    // );
+    // Create hinge constraint between anchor and torso
+    constraints.spinHinge = new AmmoLib.btHingeConstraint(
+        rigidBodies.anchor,
+        rigidBodies.torso,
+        new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin
+        pivotB,                             // pivotB: torso local pivot
+        new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
+        new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
+        true                                // useReferenceFrameA
+    );
 
-    // // Disable angular motor for debugging (remove spin)
-    // // const targetSpeed = 0; // Start with no rotation
-    // // const maxTorque = 10;  // Reasonable torque limit
-    // // constraints.spinHinge.enableAngularMotor(true, targetSpeed, maxTorque);
+    // Add constraint to physics world
+    physicsWorld.addConstraint(constraints.spinHinge, false);
 
-    // // Add constraint to physics world
-    // physicsWorld.addConstraint(constraints.spinHinge, false);
-
-    console.log('⏭️ Skipping torso hinge constraint for pendulum debugging');
+    console.log('✅ Created anchor ↔ torso hinge constraint');
 
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
@@ -734,7 +758,9 @@ function createConstraints() {
         body.getMotionState().getWorldTransform(limbTransform);
         const limbOrigin = limbTransform.getOrigin();
 
-        // Convert to local spaces
+        // Compute pivots using hinge pattern:
+        // pivotA = jointWorld − torsoWorldOrigin
+        // pivotB = jointWorld − limbWorldOrigin
         const pivotA = new AmmoLib.btVector3(
             jointWorld.x - torsoOrigin.x(),
             jointWorld.y - torsoOrigin.y(),
@@ -747,20 +773,16 @@ function createConstraints() {
             jointWorld.z - limbOrigin.z()
         );
 
-        // Create hinge constraint (Z-axis for pendulum swing in XY plane)
+        // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
         const hinge = new AmmoLib.btHingeConstraint(
             rigidBodies.torso,
             body,
             pivotA,
             pivotB,
-            new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis for XY plane swing
-            new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
+            new AmmoLib.btVector3(0, 1, 0),  // axisA: Y-axis
+            new AmmoLib.btVector3(0, 1, 0),  // axisB: Y-axis
             true
         );
-
-        // Set angle limits (±90 degrees for pendulum swing)
-        const maxAngle = Math.PI / 2;
-        hinge.setLimit(-maxAngle, maxAngle);
 
         // Add to physics world (disable collisions between connected bodies)
         physicsWorld.addConstraint(hinge, false);
@@ -914,35 +936,10 @@ function animate(currentTime = 0) {
                 jointWorldPos.z + currentAnchorZ
             ));
 
-            rigidBodies.anchor.getMotionState().setWorldTransform(anchorTransform);
+            safeSetWorldTransform(rigidBodies.anchor, anchorTransform);
             rigidBodies.anchor.setActivationState(4); // DISABLE_DEACTIVATION
         }
 
-        // Move kinematic torso based on mouse position
-        if (rigidBodies.torso && jointEmptyRef) {
-            const jointWorldPos = new THREE.Vector3();
-            jointEmptyRef.getWorldPosition(jointWorldPos);
-
-            // Create rotation based on mouse tilt
-            const tiltX = currentAnchorX * 0.5; // Reduced tilt factor
-            const tiltZ = currentAnchorZ * 0.5;
-
-            const torsoTransform = new AmmoLib.btTransform();
-            torsoTransform.setIdentity();
-            torsoTransform.setOrigin(new AmmoLib.btVector3(
-                jointWorldPos.x,
-                jointWorldPos.y,
-                jointWorldPos.z
-            ));
-
-            // Apply rotation for tilting
-            const rotation = new AmmoLib.btQuaternion();
-            rotation.setEulerZYX(tiltZ, 0, tiltX); // ZYX order for tilt
-            torsoTransform.setRotation(rotation);
-
-            rigidBodies.torso.getMotionState().setWorldTransform(torsoTransform);
-            rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
-        }
 
         // Step physics simulation
         if (physicsWorld) {
@@ -982,6 +979,17 @@ function animate(currentTime = 0) {
 function syncPhysicsToThree() {
     // Guard: Only sync if AmmoLib is loaded and physics bodies exist
     if (!AmmoLib || !rigidBodies.torso) {
+        return;
+    }
+
+    // 🔒 Safety guard: never sync world physics into parented meshes
+    if (
+        (leftArmRef && leftArmRef.parent !== scene) ||
+        (rightArmRef && rightArmRef.parent !== scene) ||
+        (leftLegRef && leftLegRef.parent !== scene) ||
+        (rightLegRef && rightLegRef.parent !== scene)
+    ) {
+        console.warn('⚠️ Limbs still parented – skipping physics sync');
         return;
     }
 
