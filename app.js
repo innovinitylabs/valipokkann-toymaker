@@ -113,6 +113,9 @@ let leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 let leftHandConstraint, rightHandConstraint, leftLegConstraint, rightLegConstraint;
 let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty (for visual sync)
 
+// Hinge pivot objects - positioned at constraint locations
+let leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot;
+
 // STEP 1: Load Ammo.js using CDN and initialize physics
 function initializeAmmo() {
     console.log('🔍 Starting Ammo.js loading...');
@@ -234,19 +237,33 @@ function initScene() {
             // Find toy parts in the hierarchy
             findToyParts(toyGroupRef);
 
-            // 🔧 MANUAL CONTROL: Attach arms to torso for local hinge rotation
-            // Keep legs in world space for now (they might need different handling)
+            // 🔧 MANUAL CONTROL: Create hinge pivots at constraint locations
             if (bodyMainRef) {
-                if (leftArmRef) bodyMainRef.attach(leftArmRef);
-                if (rightArmRef) bodyMainRef.attach(rightArmRef);
-                // Keep legs in world space for now
+                // Create pivot objects positioned at constraint locations
+                if (leftHandConstraint) {
+                    leftArmPivot = new THREE.Object3D();
+                    leftHandConstraint.getWorldPosition(leftArmPivot.position);
+                    bodyMainRef.attach(leftArmPivot);
+                    if (leftArmRef) leftArmPivot.attach(leftArmRef);
+                    console.log('✅ Created left arm hinge pivot at:', leftArmPivot.position);
+                }
+
+                if (rightHandConstraint) {
+                    rightArmPivot = new THREE.Object3D();
+                    rightHandConstraint.getWorldPosition(rightArmPivot.position);
+                    bodyMainRef.attach(rightArmPivot);
+                    if (rightArmRef) rightArmPivot.attach(rightArmRef);
+                    console.log('✅ Created right arm hinge pivot at:', rightArmPivot.position);
+                }
+
+                // Keep legs in world space for now (they might need different handling)
                 if (leftLegRef) scene.attach(leftLegRef);
                 if (rightLegRef) scene.attach(rightLegRef);
             }
 
-            console.log('✅ Limbs attached for hinge control:', {
-                leftArm: leftArmRef?.parent === bodyMainRef,
-                rightArm: rightArmRef?.parent === bodyMainRef,
+            console.log('✅ Hinge pivots created:', {
+                leftArmPivot: !!leftArmPivot,
+                rightArmPivot: !!rightArmPivot,
                 leftLeg: leftLegRef?.parent === scene,
                 rightLeg: rightLegRef?.parent === scene
             });
@@ -932,35 +949,34 @@ function animate(currentTime = 0) {
             console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
         }
 
-        // MANUAL HINGE CONTROL - Arms positioned by translation, not rotation
+        // MANUAL HINGE CONTROL - Direct arm rotation in torso's local XY plane
         if (bodyMainRef) {
             // Smooth interpolation to target position
             currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 2;
             currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 2;
 
-            // Convert mouse position to hinge positions (in world units)
-            const maxArmReach = 2.0; // Maximum arm extension
-            const maxLegSwing = 1.0; // Maximum leg swing distance
+            // Convert mouse position to hinge angles (in radians)
+            const maxArmAngle = Math.PI / 2; // 90 degrees max arm swing
+            const maxLegAngle = Math.PI / 4; // 45 degrees max leg swing
 
-            // Calculate arm positions relative to torso
-            const armXOffset = currentAnchorX * maxArmReach; // Left-right movement
-            const armZOffset = currentAnchorZ * maxArmReach; // Forward-back movement
+            // Arms swing in torso's local XY plane (around X-axis for up-down swing)
+            const leftArmAngle = currentAnchorX * maxArmAngle;   // X mouse controls left arm
+            const rightArmAngle = currentAnchorX * maxArmAngle;  // X mouse controls right arm (same direction for jumping jack)
+            const armVerticalAngle = currentAnchorZ * maxArmAngle; // Y mouse controls vertical swing
 
-            // Legs swing in world space
-            const legSwingAngle = currentAnchorZ * Math.PI / 6; // 30 degrees max
+            // Legs swing in world space for now
+            const legSwingAngle = currentAnchorZ * maxLegAngle;
 
-            // Position arms by translation (no local rotation)
-            if (leftArmRef) {
-                // Reset any rotation
-                leftArmRef.rotation.set(0, 0, 0);
-                // Position relative to torso's local space
-                leftArmRef.position.set(-armXOffset, 0, armZOffset);
+            // Apply hinge rotation to pivot objects (limbs swing around constraint points)
+            if (leftArmPivot) {
+                leftArmPivot.rotation.x = leftArmAngle;
+                leftArmPivot.rotation.y = 0; // Reset other axes
+                leftArmPivot.rotation.z = 0;
             }
-            if (rightArmRef) {
-                // Reset any rotation
-                rightArmRef.rotation.set(0, 0, 0);
-                // Position relative to torso's local space
-                rightArmRef.position.set(armXOffset, 0, -armZOffset);
+            if (rightArmPivot) {
+                rightArmPivot.rotation.x = rightArmAngle;
+                rightArmPivot.rotation.y = 0; // Reset other axes
+                rightArmPivot.rotation.z = 0;
             }
 
             // Apply world hinge rotation to legs (around Y-axis)
