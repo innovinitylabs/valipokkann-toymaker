@@ -86,40 +86,26 @@ const waitForAmmo = () => {
         console.log("🔍 Ammo keys:", Object.keys(Ammo));
         console.log("🔍 Ammo.constructor:", Ammo.constructor);
 
-        // Try different ways to initialize Ammo
-        if (typeof Ammo === 'function') {
-            console.log("✅ Ammo is a function, calling Ammo()...");
-            Ammo().then((AmmoInstance) => {
-                AmmoLib = AmmoInstance;
-                Ammo = AmmoInstance;
-                console.log("✅ Ammo.js initialized via function call");
-                loadGLTFAndInitPhysics();
-            }).catch((error) => {
-                console.error("❌ Ammo() promise failed:", error);
+        // Check if Bullet API is available directly
+        if (Ammo.btVector3 && Ammo.btBoxShape && Ammo.btDiscreteDynamicsWorld) {
+            console.log("✅ Bullet API available directly on Ammo object!");
+            console.log("Available classes:", {
+                btVector3: !!Ammo.btVector3,
+                btBoxShape: !!Ammo.btBoxShape,
+                btDiscreteDynamicsWorld: !!Ammo.btDiscreteDynamicsWorld,
+                btHingeConstraint: !!Ammo.btHingeConstraint
             });
-        } else if (Ammo && typeof Ammo.then === 'function') {
-            console.log("✅ Ammo is a promise, awaiting...");
-            Ammo.then((AmmoInstance) => {
-                AmmoLib = AmmoInstance;
-                Ammo = AmmoInstance;
-                console.log("✅ Ammo.js initialized via promise");
-                loadGLTFAndInitPhysics();
-            }).catch((error) => {
-                console.error("❌ Ammo promise failed:", error);
-            });
-        } else if (Ammo && typeof Ammo.ready === 'function') {
-            console.log("✅ Ammo has ready method, calling...");
-            Ammo.ready().then((AmmoInstance) => {
-                AmmoLib = AmmoInstance;
-                Ammo = AmmoInstance;
-                console.log("✅ Ammo.js initialized via ready()");
-                loadGLTFAndInitPhysics();
-            }).catch((error) => {
-                console.error("❌ Ammo.ready() failed:", error);
-            });
+
+            AmmoLib = Ammo; // Already initialized
+            console.log("🎯 Ammo.js ready to use - loading GLTF and physics");
+            loadGLTFAndInitPhysics();
         } else {
-            console.error("❌ Ammo object found but no known initialization method");
-            console.error("Ammo object:", Ammo);
+            console.error("❌ Ammo object found but Bullet API not available");
+            console.error("Missing classes:", {
+                btVector3: !!Ammo.btVector3,
+                btBoxShape: !!Ammo.btBoxShape,
+                btDiscreteDynamicsWorld: !!Ammo.btDiscreteDynamicsWorld
+            });
         }
     } else {
         console.log("⏳ Ammo.js not loaded yet, waiting...");
