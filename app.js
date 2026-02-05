@@ -99,11 +99,23 @@ loader.load(
         findToyParts(toyGroupRef);
 
         // Initialize physics after GLTF is loaded
-        Ammo().then((AmmoLib) => {
-            Ammo = AmmoLib;
-            initPhysics();
-            console.log('Ammo.js physics initialized');
-        });
+        // Wait for Ammo.js to be available
+        const initAmmoPhysics = () => {
+            if (typeof Ammo === 'function') {
+                Ammo().then((AmmoLib) => {
+                    Ammo = AmmoLib;
+                    initPhysics();
+                    console.log('Ammo.js physics initialized');
+                }).catch((error) => {
+                    console.error('Failed to initialize Ammo.js:', error);
+                });
+            } else {
+                // Retry after a short delay if Ammo isn't loaded yet
+                setTimeout(initAmmoPhysics, 100);
+            }
+        };
+
+        initAmmoPhysics();
 
         console.log('GLTF loaded successfully');
         console.log('Toy hierarchy:', toyGroupRef);
