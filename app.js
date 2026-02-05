@@ -333,7 +333,7 @@ function createRigidBodies() {
         // Use btSphereShape for simple anchor
         const anchorShape = new AmmoLib.btSphereShape(0.1); // Small sphere
 
-        // STEP 2: ALIGN ANCHOR TO JOINT EMPTY
+        // Align anchor to Empty position initially
         const jointWorldPos = new THREE.Vector3();
         jointEmptyRef.getWorldPosition(jointWorldPos);
 
@@ -375,13 +375,6 @@ function createRigidBodies() {
         bodyMainRef.getWorldPosition(worldPos);
         bodyMainRef.getWorldQuaternion(worldQuat);
 
-        // Get Empty world position (this is our pivot/joint)
-        const jointWorldPos = new THREE.Vector3();
-        jointEmptyRef.getWorldPosition(jointWorldPos);
-
-        // Compute offset from torso mesh position to Empty (for visual sync)
-        torsoToEmptyOffset.subVectors(worldPos, jointWorldPos);
-
         // Approximate box shape from group bounds
         const bbox = new THREE.Box3().setFromObject(bodyMainRef);
         const size = bbox.getSize(new THREE.Vector3());
@@ -395,11 +388,10 @@ function createRigidBodies() {
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         torsoShape.calculateLocalInertia(mass, localInertia);
 
-        // Create motion state at the Empty position (joint location)
-        // This ensures rotation happens around the joint
+        // Create motion state at the GLTF position - physics body starts where mesh is
         const transform = new AmmoLib.btTransform();
         transform.setIdentity();
-        transform.setOrigin(new AmmoLib.btVector3(jointWorldPos.x, jointWorldPos.y, jointWorldPos.z));
+        transform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
         transform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
 
         const motionState = new AmmoLib.btDefaultMotionState(transform);
@@ -414,6 +406,7 @@ function createRigidBodies() {
         rigidBodies.torso.setDamping(0.1, 0.2); // linear, angular damping
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies.torso.setSleepingThresholds(0, 0);
+        rigidBodies.torso.setDeactivationTime(0); // Never deactivate
 
         // Add to physics world
         physicsWorld.addRigidBody(rigidBodies.torso);
@@ -465,6 +458,7 @@ function createRigidBodies() {
         rigidBodies[name].setDamping(0.1, 0.2);
         rigidBodies[name].setActivationState(4);
         rigidBodies[name].setSleepingThresholds(0, 0);
+        rigidBodies[name].setDeactivationTime(0); // Never deactivate
 
         physicsWorld.addRigidBody(rigidBodies[name]);
         console.log(`✅ Created ${name} body (mass: ${mass})`);
@@ -515,9 +509,21 @@ function createConstraints() {
     // axis = vertical (Y)
 
     // STEP 4: COMPUTE TORSO LOCAL PIVOT FROM EMPTY
-    // Both anchor and torso physics bodies are positioned at the Empty
-    // So both pivots are at (0, 0, 0) in their local spaces
-    const pivotB = new AmmoLib.btVector3(0, 0, 0);
+    // Physics body is at GLTF position, pivot is offset to Empty position
+    const jointWorld = new THREE.Vector3();
+    jointEmptyRef.getWorldPosition(jointWorld);
+
+    // Get torso physics body world position (should be GLTF position)
+    const torsoTransform = new AmmoLib.btTransform();
+    rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
+    const torsoOrigin = torsoTransform.getOrigin();
+
+    // Pivot is the offset from physics body to Empty (joint)
+    const pivotB = new AmmoLib.btVector3(
+        jointWorld.x - torsoOrigin.x(),
+        jointWorld.y - torsoOrigin.y(),
+        jointWorld.z - torsoOrigin.z()
+    );
 
     // Create hinge constraint
     constraints.spinHinge = new AmmoLib.btHingeConstraint(
@@ -719,16 +725,16 @@ function animate(currentTime = 0) {
             currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 3; // Smooth factor
             currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 3;
 
-            // Get Empty Y position to preserve vertical alignment
+            // Get Empty position as base
             const jointWorldPos = new THREE.Vector3();
             jointEmptyRef.getWorldPosition(jointWorldPos);
 
-            // Set anchor transform (X/Z from cursor offset, Y from Empty position)
+            // Set anchor transform - move in X/Z plane relative to Empty
             const anchorTransform = new AmmoLib.btTransform();
             anchorTransform.setIdentity();
             anchorTransform.setOrigin(new AmmoLib.btVector3(
                 jointWorldPos.x + currentAnchorX,
-                jointWorldPos.y,
+                jointWorldPos.y,  // Keep Y at Empty level
                 jointWorldPos.z + currentAnchorZ
             ));
 
@@ -772,13 +778,17 @@ function syncPhysicsToThree() {
             const p = tmpTrans.getOrigin();
             const q = tmpTrans.getRotation();
 
-            // Apply offset to position: physics body is at Empty, but mesh needs to be offset
-            bodyMainRef.position.set(
-                p.x() + torsoToEmptyOffset.x,
-                p.y() + torsoToEmptyOffset.y,
-                p.z() + torsoToEmptyOffset.z
-            );
+            // Debug: check if values are valid
+            if (isNaN(p.x()) || isNaN(p.y()) || isNaN(p.z())) {
+                console.warn('⚠️ Invalid physics position, skipping sync');
+                return;
+            }
+
+            // Physics body is at GLTF position, sync directly
+            bodyMainRef.position.set(p.x(), p.y(), p.z());
             bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
+        } else {
+            console.warn('⚠️ Torso motion state is null');
         }
     }
 
