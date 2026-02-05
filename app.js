@@ -78,7 +78,10 @@ let constraints = {};
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy
 let bodyMainRef;
+let bodyMainMesh; // Actual mesh inside bodyMainRef (to avoid duplicate)
 let jointEmptyRef; // Blender Empty marking the stick-to-torso joint
+let leftArmRef, rightArmRef, leftLegRef, rightLegRef;
+let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty (for visual sync)
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
 function initializeAmmo() {
@@ -243,6 +246,19 @@ function findToyParts(object) {
         console.log('📍 Torso rotation:', bodyMainRef.rotation);
         console.log('📍 Torso type:', bodyMainRef.type);
         console.log('📍 Torso children:', bodyMainRef.children.length);
+        
+        // Find the actual mesh inside bodyMainRef to avoid duplicate rendering
+        bodyMainRef.traverse((child) => {
+            if (child.isMesh && !bodyMainMesh) {
+                bodyMainMesh = child;
+                console.log('✅ Found torso mesh:', bodyMainMesh.name);
+            }
+        });
+        
+        if (!bodyMainMesh) {
+            console.warn('⚠️ No mesh found in bodyMainRef, will sync to group');
+            bodyMainMesh = bodyMainRef; // Fallback to group
+        }
     } else {
         console.error('❌ CRITICAL: body_main collection not found - cannot create torso physics');
         console.error('💡 Check that your Blender collection is named exactly: body_main');
@@ -264,6 +280,19 @@ function findToyParts(object) {
         console.log('✅ Joint Empty found:', jointEmptyRef.name);
         console.log('📍 Joint Empty position:', jointEmptyRef.position);
     }
+
+    // Find limbs for future physics setup
+    leftArmRef = findCollectionInGLTF(object, 'left_arm');
+    rightArmRef = findCollectionInGLTF(object, 'right_arm');
+    leftLegRef = findCollectionInGLTF(object, 'left_leg');
+    rightLegRef = findCollectionInGLTF(object, 'right_leg');
+
+    console.log('📋 Limbs found:', {
+        leftArm: !!leftArmRef,
+        rightArm: !!rightArmRef,
+        leftLeg: !!leftLegRef,
+        rightLeg: !!rightLegRef
+    });
 }
 
 // Initialize Ammo.js physics world and create rigid bodies
@@ -341,6 +370,13 @@ function createRigidBodies() {
         bodyMainRef.getWorldPosition(worldPos);
         bodyMainRef.getWorldQuaternion(worldQuat);
 
+        // Get Empty world position (this is our pivot/joint)
+        const jointWorldPos = new THREE.Vector3();
+        jointEmptyRef.getWorldPosition(jointWorldPos);
+
+        // Compute offset from torso mesh position to Empty (for visual sync)
+        torsoToEmptyOffset.subVectors(worldPos, jointWorldPos);
+
         // Approximate box shape from group bounds
         const bbox = new THREE.Box3().setFromObject(bodyMainRef);
         const size = bbox.getSize(new THREE.Vector3());
@@ -354,10 +390,11 @@ function createRigidBodies() {
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         torsoShape.calculateLocalInertia(mass, localInertia);
 
-        // Create motion state
+        // Create motion state at the Empty position (joint location)
+        // This ensures rotation happens around the joint
         const transform = new AmmoLib.btTransform();
         transform.setIdentity();
-        transform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+        transform.setOrigin(new AmmoLib.btVector3(jointWorldPos.x, jointWorldPos.y, jointWorldPos.z));
         transform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
 
         const motionState = new AmmoLib.btDefaultMotionState(transform);
@@ -420,20 +457,9 @@ function createConstraints() {
     // axis = vertical (Y)
 
     // STEP 4: COMPUTE TORSO LOCAL PIVOT FROM EMPTY
-    // World position of joint
-    const jointWorld = new THREE.Vector3();
-    jointEmptyRef.getWorldPosition(jointWorld);
-
-    // World transform of torso
-    const torsoWorldPos = new THREE.Vector3();
-    bodyMainRef.getWorldPosition(torsoWorldPos);
-
-    // Convert world joint → torso local space
-    const pivotB = new AmmoLib.btVector3(
-        jointWorld.x - torsoWorldPos.x,
-        jointWorld.y - torsoWorldPos.y,
-        jointWorld.z - torsoWorldPos.z
-    );
+    // Both anchor and torso physics bodies are positioned at the Empty
+    // So both pivots are at (0, 0, 0) in their local spaces
+    const pivotB = new AmmoLib.btVector3(0, 0, 0);
 
     // Create hinge constraint
     constraints.spinHinge = new AmmoLib.btHingeConstraint(
@@ -623,7 +649,12 @@ function syncPhysicsToThree() {
             const p = tmpTrans.getOrigin();
             const q = tmpTrans.getRotation();
 
-            bodyMainRef.position.set(p.x(), p.y(), p.z());
+            // Apply offset to position: physics body is at Empty, but mesh needs to be offset
+            bodyMainRef.position.set(
+                p.x() + torsoToEmptyOffset.x,
+                p.y() + torsoToEmptyOffset.y,
+                p.z() + torsoToEmptyOffset.z
+            );
             bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
         }
     }
