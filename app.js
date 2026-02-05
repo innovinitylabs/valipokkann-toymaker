@@ -311,6 +311,19 @@ function initScene() {
                 // Create constraints (only if bodies were created successfully)
                 if (rigidBodies.anchor && rigidBodies.torso) {
                     createConstraints();
+
+                    // Now switch limbs from kinematic to dynamic (safe now that constraints are set)
+                    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                        if (rigidBodies[name]) {
+                            const flags = rigidBodies[name].getCollisionFlags();
+                            rigidBodies[name].setCollisionFlags(flags & ~2); // Remove CF_KINEMATIC_OBJECT
+                            console.log(`🔄 Switched ${name} from kinematic to dynamic`);
+                        }
+                    });
+
+                    // Re-enable gravity now that constraints are established
+                    physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
+                    console.log('⚖️ Gravity re-enabled:', physicsWorld.getGravity().y());
                     
                     // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
                     physicsMeshMap = new Map();
@@ -614,8 +627,8 @@ function createRigidBodies() {
             return;
         }
 
-        // Shrink collision shapes for mechanical clearance
-        const shrink = 0.9; // 90% of original size for torso
+        // Shrink collision shapes significantly to prevent initial overlap
+        const shrink = 0.5; // 50% of original size for torso (more clearance)
         const halfExtents = new AmmoLib.btVector3(
             size.x * 0.5 * shrink,
             size.y * 0.5 * shrink,
@@ -692,8 +705,8 @@ function createRigidBodies() {
             return;
         }
 
-        // Shrink collision shapes for mechanical clearance
-        const shrink = 0.7; // 70% of original size for limbs (more clearance)
+        // Shrink collision shapes significantly to prevent initial overlap
+        const shrink = 0.3; // 30% of original size for limbs (much more clearance)
         const halfExtents = new AmmoLib.btVector3(
             size.x * 0.5 * shrink,
             size.y * 0.5 * shrink,
@@ -718,7 +731,12 @@ function createRigidBodies() {
 
         rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
 
-        // Make dynamic with moderate damping (let gravity act naturally)
+        // TEMPORARY: Make kinematic initially to prevent collision during setup
+        rigidBodies[name].setCollisionFlags(
+            rigidBodies[name].getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
+        );
+
+        // Basic setup
         rigidBodies[name].setDamping(0.1, 0.2); // Normal damping
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies[name].setSleepingThresholds(0, 0);
