@@ -70,83 +70,70 @@ scene.add(pointLight);
 const loader = new THREE.GLTFLoader();
 
 // Ammo.js physics world and rigid bodies
-let Ammo;
+let AmmoLib = null;
 let physicsWorld;
 let rigidBodies = {};
 let constraints = [];
-let physicsReady = false; // Flag to track when physics system is initialized
 
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy
 let bodyMainRef, leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 
-// Wait for Ammo.js to load, then load GLTF and initialize physics
-const initApp = () => {
-    console.log('🔄 Waiting for Ammo.js to be ready...');
+// HARD GATE: Wait for Ammo.js to initialize, then start everything
+Ammo().then((AmmoInstance) => {
+    AmmoLib = AmmoInstance;
+    Ammo = AmmoInstance; // global alias for convenience
 
-    if (typeof Ammo === 'function') {
-        console.log('✅ Ammo.js is ready, starting GLTF loading...');
+    console.log("✅ Ammo.js initialized");
 
-        // Load the GLTF model and initialize physics
-        loader.load(
-            'ToyMaker_anim1.glb',
-            (gltf) => {
-                toyGroupRef = gltf.scene;
+    // Load GLTF and initialize physics
+    loadGLTFAndInitPhysics();
+});
 
-                // Enable shadows
-                toyGroupRef.traverse((child) => {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                    }
-                });
+// Load GLTF model and initialize physics
+function loadGLTFAndInitPhysics() {
+    loader.load(
+        'ToyMaker_anim1.glb',
+        (gltf) => {
+            toyGroupRef = gltf.scene;
 
-                scene.add(toyGroupRef);
+            // Enable shadows
+            toyGroupRef.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
 
-                // Find toy parts in the hierarchy
-                findToyParts(toyGroupRef);
+            scene.add(toyGroupRef);
 
-                // Initialize physics now that both GLTF and Ammo are ready
-                console.log('🎯 Both GLTF and Ammo.js ready - initializing physics...');
-                Ammo().then((AmmoLib) => {
-                    console.log('✅ Ammo() promise resolved');
-                    Ammo = AmmoLib;
-                    console.log('✅ Ammo library assigned, calling initPhysics()');
-                    initPhysics();
-                    physicsReady = true;
+            // Find toy parts in the hierarchy
+            findToyParts(toyGroupRef);
 
-                    // Hide loading indicator
-                    const loadingEl = document.getElementById('loading');
-                    if (loadingEl) {
-                        loadingEl.style.display = 'none';
-                    }
+            // Initialize physics - Ammo is guaranteed to be ready here
+            initPhysics();
 
-                    console.log('🎮 Ammo.js physics initialized and ready!');
-                    console.log('💡 Try clicking to apply torque and watch the physics simulation!');
-                }).catch((error) => {
-                    console.error('❌ Ammo() promise failed:', error);
-                });
-
-                console.log('GLTF loaded successfully');
-                console.log('Toy hierarchy:', toyGroupRef);
-            },
-            (progress) => {
-                console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-            },
-            (error) => {
-                console.error('Error loading GLTF:', error);
-                console.error('Make sure ToyMaker_anim1.glb is in the same directory as index.html');
+            // Hide loading indicator
+            const loadingEl = document.getElementById('loading');
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
             }
-        );
-    } else {
-        console.log('⏳ Ammo.js not ready yet, retrying in 100ms...');
-        setTimeout(initApp, 100);
-    }
-};
 
-// Start the app initialization
-console.log('🚀 Starting app initialization...');
-initApp();
+            console.log('GLTF loaded successfully');
+            console.log('Toy hierarchy:', toyGroupRef);
+
+            // Start animation loop
+            animate();
+        },
+        (progress) => {
+            console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+        },
+        (error) => {
+            console.error('Error loading GLTF:', error);
+            console.error('Make sure ToyMaker_anim1.glb is in the same directory as index.html');
+        }
+    );
+}
 
 // Find mesh within a GLTF collection group
 function findMeshInCollection(collection) {
@@ -253,6 +240,17 @@ function findToyParts(object) {
 
 // Initialize Ammo.js physics world and create rigid bodies
 function initPhysics() {
+    // ASSERT AMMO IS REAL
+    if (!Ammo) {
+        throw new Error("Ammo.js not initialized");
+    }
+
+    // ADD A PHYSICS SANITY TEST
+    const testShape = new Ammo.btBoxShape(
+        new Ammo.btVector3(1, 1, 1)
+    );
+    console.log("✅ Bullet sanity test passed", testShape);
+
     try {
         console.log('🔧 Initializing Ammo.js physics world...');
 
@@ -558,12 +556,6 @@ function onMouseMove(event) {
 function onMouseDown(event) {
     try {
         mousePressed = true;
-
-        // Check if physics system is ready
-        if (!physicsReady) {
-            console.log('⏳ Physics not ready yet - please wait for Ammo.js to load');
-            return;
-        }
 
         // Apply angular velocity to kinematic stick (manual integration)
         const dir = Math.random() > 0.5 ? 1 : -1;

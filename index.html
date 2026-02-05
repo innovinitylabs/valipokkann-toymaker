@@ -46,26 +46,9 @@
         Loading Ammo.js physics engine...
     </div>
 
-    <!-- Load Ammo.js FIRST (it's the heaviest) -->
-    <script src="ammo.js"></script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-
-    <script>
-        // Debug: Check when everything loads
-        window.addEventListener('load', function() {
-            console.log('🚀 Page fully loaded');
-            console.log('🔍 Ammo available:', typeof Ammo);
-            console.log('🔍 window.Ammo exists:', 'Ammo' in window);
-            if (typeof Ammo === 'function') {
-                console.log('✅ Ammo.js loaded successfully');
-            } else {
-                console.log('❌ Ammo.js failed to load - check network tab');
-            }
-        });
-    </script>
-
+    <script src="https://cdn.jsdelivr.net/npm/ammo.js@0.0.10/ammo.wasm.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
