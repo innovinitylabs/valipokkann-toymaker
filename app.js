@@ -406,7 +406,6 @@ function createRigidBodies() {
         rigidBodies.torso.setDamping(0.1, 0.2); // linear, angular damping
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies.torso.setSleepingThresholds(0, 0);
-        rigidBodies.torso.setDeactivationTime(0); // Never deactivate
 
         // Add to physics world
         physicsWorld.addRigidBody(rigidBodies.torso);
@@ -458,7 +457,6 @@ function createRigidBodies() {
         rigidBodies[name].setDamping(0.1, 0.2);
         rigidBodies[name].setActivationState(4);
         rigidBodies[name].setSleepingThresholds(0, 0);
-        rigidBodies[name].setDeactivationTime(0); // Never deactivate
 
         physicsWorld.addRigidBody(rigidBodies[name]);
         console.log(`✅ Created ${name} body (mass: ${mass})`);
