@@ -928,59 +928,39 @@ function animate(currentTime = 0) {
             console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
         }
 
-        // Guard: Only run physics if AmmoLib is loaded
-        if (!AmmoLib) {
-            renderer.render(scene, camera);
-            return;
-        }
-
-        // STEP 7: CURSOR CONTROL - Update anchor body transform every frame
-        if (rigidBodies.anchor && jointEmptyRef) {
+        // MANUAL HINGE CONTROL - Direct arm rotation based on mouse
+        if (leftArmRef && rightArmRef) {
             // Smooth interpolation to target position
-            currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 3; // Smooth factor
-            currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 3;
+            currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 2;
+            currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 2;
 
-            // Get Empty position as base
-            const jointWorldPos = new THREE.Vector3();
-            jointEmptyRef.getWorldPosition(jointWorldPos);
+            // Convert mouse position to hinge angles (in radians)
+            const maxAngle = Math.PI / 3; // 60 degrees max swing
+            const leftArmAngle = currentAnchorX * maxAngle;   // X controls left arm
+            const rightArmAngle = -currentAnchorX * maxAngle; // X controls right arm (opposite)
+            const legSwingAngle = currentAnchorZ * maxAngle;  // Z controls leg swing
 
-            // Set anchor transform - move in X/Z plane relative to Empty
-            const anchorTransform = new AmmoLib.btTransform();
-            anchorTransform.setIdentity();
-            anchorTransform.setOrigin(new AmmoLib.btVector3(
-                jointWorldPos.x + currentAnchorX,
-                jointWorldPos.y,  // Keep Y at Empty level
-                jointWorldPos.z + currentAnchorZ
-            ));
-
-            safeSetWorldTransform(rigidBodies.anchor, anchorTransform);
-            rigidBodies.anchor.setActivationState(4); // DISABLE_DEACTIVATION
-        }
-
-
-        // Step physics simulation
-        if (physicsWorld) {
-            // Debug: Log physics step
-            if (delta > 0.0167) { // More than 60 FPS
-                console.warn('⚠️ Physics step with large delta:', delta);
+            // Apply hinge rotation to left arm (Y-axis hinge)
+            if (leftArmRef) {
+                leftArmRef.rotation.y = leftArmAngle;
             }
 
-            try {
-                physicsWorld.stepSimulation(delta, 10, 1/60); // Fixed time step for stability
-            } catch (e) {
-                console.error('❌ Physics step failed:', e);
-                return;
+            // Apply hinge rotation to right arm (Y-axis hinge)
+            if (rightArmRef) {
+                rightArmRef.rotation.y = rightArmAngle;
             }
 
-            // Debug: Check if this is the first few frames
-            if (frameCount < 5) {
-                frameCount++;
-                console.log(`📊 Frame ${frameCount}: physics stepped with delta ${delta.toFixed(4)}`);
+            // Apply hinge rotation to legs (Y-axis hinge)
+            if (leftLegRef) {
+                leftLegRef.rotation.y = legSwingAngle;
+            }
+            if (rightLegRef) {
+                rightLegRef.rotation.y = -legSwingAngle; // Opposite direction
             }
         }
 
-        // STEP 9: SYNC PHYSICS → THREE
-        syncPhysicsToThree();
+        // COMMENTED OUT PHYSICS SYNC
+        // syncPhysicsToThree();
 
         renderer.render(scene, camera);
     } catch (error) {
@@ -992,7 +972,8 @@ function animate(currentTime = 0) {
     }
 }
 
-// STEP 9: SYNC PHYSICS → THREE (MANDATORY)
+// COMMENTED OUT PHYSICS SYNC - USING MANUAL CONTROL
+/*
 function syncPhysicsToThree() {
     // Guard: Only sync if AmmoLib is loaded and physics bodies exist
     if (!AmmoLib || !rigidBodies.torso) {
@@ -1071,7 +1052,7 @@ function syncPhysicsToThree() {
                     }
 
                     ref.position.set(p.x(), p.y(), p.z());
-                    ref.quaternion.set(q.x(), q.y(), q.z(), q.w());
+                    ref.quaternion.set(q.x(), p.y(), q.z(), q.w());
                 } catch (e) {
                     console.error(`❌ Error getting ${name} transform:`, e);
                 }
@@ -1082,6 +1063,7 @@ function syncPhysicsToThree() {
     // Anchor is kinematic and doesn't need syncing back to Three.js
     // (it only moves based on cursor input)
 }
+*/
 
 // Handle window resize
 function onWindowResize() {
