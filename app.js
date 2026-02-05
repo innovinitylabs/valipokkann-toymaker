@@ -210,6 +210,9 @@ function initPhysics() {
         // Set gravity (negative Y in Three.js = down)
         physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
 
+        // DEBUG: Check rigid body count
+        console.log('🔢 Physics world initialized with gravity:', physicsWorld.getGravity().y());
+
         console.log('✅ Physics world created with gravity:', physicsWorld.getGravity().y());
         console.log('✅ Solver iterations configured');
         console.log('⏳ Waiting for GLTF to load before creating rigid bodies...');
@@ -690,7 +693,7 @@ function createRigidBodies() {
         }
 
         // Shrink collision shapes for mechanical clearance
-        const shrink = 0.85; // 85% of original size for limbs
+        const shrink = 0.7; // 70% of original size for limbs (more clearance)
         const halfExtents = new AmmoLib.btVector3(
             size.x * 0.5 * shrink,
             size.y * 0.5 * shrink,
@@ -721,7 +724,8 @@ function createRigidBodies() {
         rigidBodies[name].setSleepingThresholds(0, 0);
 
         physicsWorld.addRigidBody(rigidBodies[name]);
-        console.log(`✅ Created ${name} body (mass: ${mass}) at (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
+        console.log(`✅ Created ${name} rigid body (mass: ${mass}, collider size: ${halfExtents.x().toFixed(3)} x ${halfExtents.y().toFixed(3)} x ${halfExtents.z().toFixed(3)})`);
+        console.log(`   Position: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
     });
 
     console.log('📊 Rigid bodies summary:', {
@@ -732,6 +736,10 @@ function createRigidBodies() {
         leftLeg: !!rigidBodies.leftLeg,
         rightLeg: !!rigidBodies.rightLeg
     });
+
+    // Count total rigid bodies in physics world
+    const numBodies = physicsWorld.getNumCollisionObjects();
+    console.log(`🔢 Total rigid bodies in physics world: ${numBodies}`);
 }
 
 // Create hinge constraint with motor between anchor and torso
