@@ -100,36 +100,43 @@ loader.load(
         findToyParts(toyGroupRef);
 
         // Initialize physics after GLTF is loaded
-        // Ammo.js should now be loaded from local file
+        // Wait for Ammo.js to be available
         console.log('🔄 Initializing Ammo.js physics...');
-        console.log('🔍 Ammo type:', typeof Ammo, 'value:', Ammo);
 
-        if (typeof Ammo === 'function') {
-            console.log('✅ Ammo.js function found, calling Ammo()...');
-            Ammo().then((AmmoLib) => {
-                console.log('✅ Ammo() promise resolved, got AmmoLib');
-                Ammo = AmmoLib;
-                console.log('✅ Ammo library assigned, calling initPhysics()...');
-                initPhysics();
-                physicsReady = true;
+        const tryInitAmmo = () => {
+            console.log('🔍 Checking Ammo availability...');
+            console.log('  - typeof Ammo:', typeof Ammo);
+            console.log('  - window.Ammo exists:', 'Ammo' in window);
+            console.log('  - Ammo value:', Ammo);
 
-                // Hide loading indicator
-                const loadingEl = document.getElementById('loading');
-                if (loadingEl) {
-                    loadingEl.style.display = 'none';
-                }
+            if (typeof Ammo === 'function') {
+                console.log('✅ Ammo.js function found, initializing physics...');
+                Ammo().then((AmmoLib) => {
+                    console.log('✅ Ammo() promise resolved');
+                    Ammo = AmmoLib;
+                    console.log('✅ Ammo library assigned, calling initPhysics()');
+                    initPhysics();
+                    physicsReady = true;
 
-                console.log('🎮 Ammo.js physics initialized and ready!');
-                console.log('💡 Try clicking to apply torque and watch the physics simulation!');
-            }).catch((error) => {
-                console.error('❌ Failed to initialize Ammo.js:', error);
-                console.error('Stack:', error.stack);
-            });
-        } else {
-            console.error('❌ Ammo.js not available as function:', typeof Ammo);
-            console.error('💡 This means ammo.js script did not load properly');
-            console.error('💡 Check: 1) Web server running, 2) URL is http://127.0.0.1:8000/, 3) Hard refresh done');
-        }
+                    // Hide loading indicator
+                    const loadingEl = document.getElementById('loading');
+                    if (loadingEl) {
+                        loadingEl.style.display = 'none';
+                    }
+
+                    console.log('🎮 Ammo.js physics initialized and ready!');
+                    console.log('💡 Try clicking to apply torque and watch the physics simulation!');
+                }).catch((error) => {
+                    console.error('❌ Ammo() promise failed:', error);
+                });
+            } else {
+                console.log('⏳ Ammo.js not ready yet, will retry...');
+                // Retry after a short delay
+                setTimeout(tryInitAmmo, 500);
+            }
+        };
+
+        tryInitAmmo();
 
         console.log('GLTF loaded successfully');
         console.log('Toy hierarchy:', toyGroupRef);
