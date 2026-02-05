@@ -84,19 +84,8 @@ loader.load(
     (gltf) => {
         toyGroupRef = gltf.scene;
 
-        // Center and scale the model
-        const box = new THREE.Box3().setFromObject(toyGroupRef);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-
-        // Move to origin
-        toyGroupRef.position.sub(center);
-
-        // Scale to reasonable size (assuming original is 1 unit = 1 meter)
-        const maxDimension = Math.max(size.x, size.y, size.z);
-        const targetSize = 3; // Target size in scene units
-        const scale = targetSize / maxDimension;
-        toyGroupRef.scale.setScalar(scale);
+        // DO NOT recenter, reposition, or rescale the GLTF scene
+        // Keep the GLTF EXACTLY as authored
 
         // Enable shadows
         toyGroupRef.traverse((child) => {
@@ -111,14 +100,8 @@ loader.load(
         // Find toy parts in the hierarchy - this will need to be adjusted based on actual GLTF structure
         findToyParts(toyGroupRef);
 
-        // STEP 1: DETACH LIMBS FROM GLTF HIERARCHY
-        // Limbs must be world objects so physics can drive them without parent interference
-        if (leftArmRef) scene.attach(leftArmRef);
-        if (rightArmRef) scene.attach(rightArmRef);
-        if (leftLegRef) scene.attach(leftLegRef);
-        if (rightLegRef) scene.attach(rightLegRef);
-
-        console.log('✅ Detached limbs from GLTF hierarchy for physics control');
+        // DO NOT DETACH LIMBS - hierarchy is correct
+        // Limbs must remain children of body_main
 
         // Set up physics bodies and constraints
         setupPhysicsBodies();
@@ -250,19 +233,30 @@ function setupPhysicsBodies() {
         // Connected using HINGE CONSTRAINTS with angular limits
 
         // STEP 1: DEFINE SINGLE PHYSICS ROOT FRAME
-        // Kinematic body represents the WHOLE TOY at origin
+        // Create single kinematic body for stick/torso (the driver)
+        // BODY PHYSICS BODY MUST FOLLOW VISUAL BODY
         bodyBody = new CANNON.Body({
             type: CANNON.Body.KINEMATIC, // Kinematic - directly controlled, not affected by forces
             mass: 0 // Mass doesn't matter for kinematic bodies
         });
         bodyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 1, 0.05)));
 
-        // Body is ALWAYS at origin in physics space
-        bodyBody.position.set(0, 0, 0);
-        bodyBody.quaternion.set(0, 0, 0, 1);
+        // Position bodyBody to match the visual body_main
+        const bodyWorldPos = new THREE.Vector3();
+        const bodyWorldQuat = new THREE.Quaternion();
+        toyGroupRef.getWorldPosition(bodyWorldPos);
+        toyGroupRef.getWorldQuaternion(bodyWorldQuat);
+
+        bodyBody.position.set(bodyWorldPos.x, bodyWorldPos.y, bodyWorldPos.z);
+        bodyBody.quaternion.set(
+            bodyWorldQuat.x,
+            bodyWorldQuat.y,
+            bodyWorldQuat.z,
+            bodyWorldQuat.w
+        );
 
         world.addBody(bodyBody);
-        console.log('✅ Created kinematic body at physics origin');
+        console.log('✅ Created kinematic body matching visual body_main');
 
         // STEP 2: CREATE LIMB BODIES RELATIVE TO BODY
         // All bodies share the same physics coordinate system
@@ -271,108 +265,92 @@ function setupPhysicsBodies() {
         const bodyWorldPos = new THREE.Vector3();
         toyGroupRef.getWorldPosition(bodyWorldPos);
 
-        // Create dynamic bodies for arms with meaningful masses
-        if (leftArmRef) {
-            const limbWorldPos = new THREE.Vector3();
-            const limbWorldQuat = new THREE.Quaternion();
+        // Create dynamic bodies for arms at constraint marker positions
+        const limbWorldPos = new THREE.Vector3();
+        const limbWorldQuat = new THREE.Quaternion();
 
+        if (leftArmRef) {
             leftArmRef.getWorldPosition(limbWorldPos);
             leftArmRef.getWorldQuaternion(limbWorldQuat);
 
-            // Convert to body-local coordinates
-            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
-
             leftArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
             leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
-            leftArmBody.position.set(localPos.x, localPos.y, localPos.z);
+            leftArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             leftArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
             // Add damping for mechanical toy feel
             leftArmBody.angularDamping = 0.4;
 
             world.addBody(leftArmBody);
-            console.log('✅ Created left arm body relative to physics root');
+            console.log('✅ Created left arm body at constraint marker position');
         }
 
         if (rightArmRef) {
-            const limbWorldPos = new THREE.Vector3();
-            const limbWorldQuat = new THREE.Quaternion();
-
             rightArmRef.getWorldPosition(limbWorldPos);
             rightArmRef.getWorldQuaternion(limbWorldQuat);
 
-            // Convert to body-local coordinates
-            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
-
             rightArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
             rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
-            rightArmBody.position.set(localPos.x, localPos.y, localPos.z);
+            rightArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             rightArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
             // Add damping for mechanical toy feel
             rightArmBody.angularDamping = 0.4;
 
             world.addBody(rightArmBody);
-            console.log('✅ Created right arm body relative to physics root');
+            console.log('✅ Created right arm body at constraint marker position');
         }
 
-        // Create dynamic bodies for legs with meaningful masses
+        // Create dynamic bodies for legs at constraint marker positions
         if (leftLegRef) {
-            const limbWorldPos = new THREE.Vector3();
-            const limbWorldQuat = new THREE.Quaternion();
-
             leftLegRef.getWorldPosition(limbWorldPos);
             leftLegRef.getWorldQuaternion(limbWorldQuat);
 
-            // Convert to body-local coordinates
-            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
-
             leftLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
             leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
-            leftLegBody.position.set(localPos.x, localPos.y, localPos.z);
+            leftLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             leftLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
             // Add damping for mechanical toy feel
             leftLegBody.angularDamping = 0.4;
 
             world.addBody(leftLegBody);
-            console.log('✅ Created left leg body relative to physics root');
+            console.log('✅ Created left leg body at constraint marker position');
         }
 
         if (rightLegRef) {
-            const limbWorldPos = new THREE.Vector3();
-            const limbWorldQuat = new THREE.Quaternion();
-
             rightLegRef.getWorldPosition(limbWorldPos);
             rightLegRef.getWorldQuaternion(limbWorldQuat);
 
-            // Convert to body-local coordinates
-            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
-
             rightLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
             rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
-            rightLegBody.position.set(localPos.x, localPos.y, localPos.z);
+            rightLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             rightLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
             // Add damping for mechanical toy feel
             rightLegBody.angularDamping = 0.4;
 
             world.addBody(rightLegBody);
-            console.log('✅ Created right leg body relative to physics root');
+            console.log('✅ Created right leg body at constraint marker position');
         }
 
-        // STEP 3: COMPUTE HINGE PIVOTS FOR MECHANICAL TOY
-        console.log('🔗 Computing hinge pivots for mechanical linkages...');
+        // STEP 3: COMPUTE HINGE PIVOTS FROM CONSTRAINT MARKERS
+        console.log('🔗 Computing hinge pivots from constraint markers...');
 
         // Arms: hinge around X-axis for forward/backward swing
         if (leftArmBody) {
-            // Mechanical attachment: left arm connects at top of stick/handle
-            const jointPos = new CANNON.Vec3(-0.15, 0.4, 0); // Mechanical left arm joint
+            // Use the constraint marker as the hinge location
+            const jointWorld = new THREE.Vector3();
+            leftArmRef.getWorldPosition(jointWorld);
 
-            // pivotA: joint position in stick local space
-            const pivotA = jointPos;
+            // Convert to body-local coordinates (pivotA)
+            const pivotA = new CANNON.Vec3(
+                jointWorld.x - bodyWorldPos.x,
+                jointWorld.y - bodyWorldPos.y,
+                jointWorld.z - bodyWorldPos.z
+            );
 
-            // pivotB: attachment point in arm local space
+            // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
             leftArmConstraint = new CANNON.HingeConstraint(bodyBody, leftArmBody, {
@@ -387,13 +365,18 @@ function setupPhysicsBodies() {
         }
 
         if (rightArmBody) {
-            // Mechanical attachment: right arm connects at top of stick/handle
-            const jointPos = new CANNON.Vec3(0.15, 0.4, 0); // Mechanical right arm joint
+            // Use the constraint marker as the hinge location
+            const jointWorld = new THREE.Vector3();
+            rightArmRef.getWorldPosition(jointWorld);
 
-            // pivotA: joint position in stick local space
-            const pivotA = jointPos;
+            // Convert to body-local coordinates (pivotA)
+            const pivotA = new CANNON.Vec3(
+                jointWorld.x - bodyWorldPos.x,
+                jointWorld.y - bodyWorldPos.y,
+                jointWorld.z - bodyWorldPos.z
+            );
 
-            // pivotB: attachment point in arm local space
+            // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
             rightArmConstraint = new CANNON.HingeConstraint(bodyBody, rightArmBody, {
@@ -409,13 +392,18 @@ function setupPhysicsBodies() {
 
         // Legs: hinge around Z-axis for left/right swing
         if (leftLegBody) {
-            // Mechanical attachment: left leg connects at bottom of stick/handle
-            const jointPos = new CANNON.Vec3(-0.12, -0.4, 0); // Mechanical left leg joint
+            // Use the constraint marker as the hinge location
+            const jointWorld = new THREE.Vector3();
+            leftLegRef.getWorldPosition(jointWorld);
 
-            // pivotA: joint position in stick local space
-            const pivotA = jointPos;
+            // Convert to body-local coordinates (pivotA)
+            const pivotA = new CANNON.Vec3(
+                jointWorld.x - bodyWorldPos.x,
+                jointWorld.y - bodyWorldPos.y,
+                jointWorld.z - bodyWorldPos.z
+            );
 
-            // pivotB: attachment point in leg local space
+            // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
             leftLegConstraint = new CANNON.HingeConstraint(bodyBody, leftLegBody, {
@@ -430,13 +418,18 @@ function setupPhysicsBodies() {
         }
 
         if (rightLegBody) {
-            // Mechanical attachment: right leg connects at bottom of stick/handle
-            const jointPos = new CANNON.Vec3(0.12, -0.4, 0); // Mechanical right leg joint
+            // Use the constraint marker as the hinge location
+            const jointWorld = new THREE.Vector3();
+            rightLegRef.getWorldPosition(jointWorld);
 
-            // pivotA: joint position in stick local space
-            const pivotA = jointPos;
+            // Convert to body-local coordinates (pivotA)
+            const pivotA = new CANNON.Vec3(
+                jointWorld.x - bodyWorldPos.x,
+                jointWorld.y - bodyWorldPos.y,
+                jointWorld.z - bodyWorldPos.z
+            );
 
-            // pivotB: attachment point in leg local space
+            // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
             rightLegConstraint = new CANNON.HingeConstraint(bodyBody, rightLegBody, {
@@ -623,20 +616,21 @@ function animate() {
             }
 
             // Sync dynamic limbs (arms and legs follow physics)
+            // Convert physics WORLD space → visual LOCAL space
             if (leftArmRef && leftArmBody) {
-                leftArmRef.position.copy(leftArmBody.position);
+                leftArmRef.parent.worldToLocal(leftArmBody.position.clone(), leftArmRef.position);
                 leftArmRef.quaternion.copy(leftArmBody.quaternion);
             }
             if (rightArmRef && rightArmBody) {
-                rightArmRef.position.copy(rightArmBody.position);
+                rightArmRef.parent.worldToLocal(rightArmBody.position.clone(), rightArmRef.position);
                 rightArmRef.quaternion.copy(rightArmBody.quaternion);
             }
             if (leftLegRef && leftLegBody) {
-                leftLegRef.position.copy(leftLegBody.position);
+                leftLegRef.parent.worldToLocal(leftLegBody.position.clone(), leftLegRef.position);
                 leftLegRef.quaternion.copy(leftLegBody.quaternion);
             }
             if (rightLegRef && rightLegBody) {
-                rightLegRef.position.copy(rightLegBody.position);
+                rightLegRef.parent.worldToLocal(rightLegBody.position.clone(), rightLegRef.position);
                 rightLegRef.quaternion.copy(rightLegBody.quaternion);
             }
         }
