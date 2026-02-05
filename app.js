@@ -81,10 +81,20 @@ let bodyMainRef;
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
 console.log('🔍 Starting Ammo.js loading...');
+console.log('typeof Ammo:', typeof Ammo);
+console.log('window.Ammo:', !!window.Ammo);
+
+if (typeof Ammo === 'undefined') {
+    console.error('❌ CRITICAL: Ammo global not found - script failed to load');
+    return;
+}
+
 Ammo().then((AmmoLibInstance) => {
     console.log('✅ Ammo.js loaded successfully');
+    console.log('AmmoLib available:', !!AmmoLibInstance);
     // Store AmmoLib globally so all functions can access it
     AmmoLib = AmmoLibInstance;
+    console.log('AmmoLib assigned, btVector3 available:', !!AmmoLib.btVector3);
     initPhysics();
     initScene();
     animate();
@@ -184,6 +194,14 @@ function findToyParts(object) {
     console.log('=== GLTF ANALYSIS FOR MOTOR-BASED JUMPING JACK ===');
     console.log('🔍 Looking for body_main collection for torso physics...');
 
+    // Debug: show ALL objects first
+    console.log('📋 ALL GLTF OBJECTS:');
+    let count = 0;
+    object.traverse((child) => {
+        count++;
+        console.log(`   ${count}. "${child.name}" (${child.type})`);
+    });
+
     // Only need body_main for now - we'll add limbs later
     bodyMainRef = findCollectionInGLTF(object, 'body_main');
 
@@ -197,12 +215,10 @@ function findToyParts(object) {
         console.error('❌ CRITICAL: body_main collection not found - cannot create torso physics');
         console.error('💡 Check that your Blender collection is named exactly: body_main');
 
-        // Debug: show all available collections
-        console.log('🔍 Available collections in GLTF:');
+        // Debug: show all available objects (not just Groups)
+        console.log('🔍 Available objects in GLTF:');
         object.traverse((child) => {
-            if (child.type === 'Group') {
-                console.log(`   Group: "${child.name}"`);
-            }
+            console.log(`   "${child.name}" (${child.type})`);
         });
     }
 }
@@ -215,8 +231,8 @@ function initPhysics() {
     }
 
     // ADD A PHYSICS SANITY TEST
-    const testShape = new Ammo.btBoxShape(
-        new Ammo.btVector3(1, 1, 1)
+    const testShape = new AmmoLib.btBoxShape(
+        new AmmoLib.btVector3(1, 1, 1)
     );
     console.log("✅ Bullet sanity test passed", testShape);
 
@@ -224,17 +240,17 @@ function initPhysics() {
         console.log('🔧 Initializing Ammo.js physics world...');
 
         // Create collision configuration and dispatcher
-        const collisionConfig = new Ammo.btDefaultCollisionConfiguration();
-        const dispatcher = new Ammo.btCollisionDispatcher(collisionConfig);
+        const collisionConfig = new AmmoLib.btDefaultCollisionConfiguration();
+        const dispatcher = new AmmoLib.btCollisionDispatcher(collisionConfig);
 
         // Create broadphase
-        const broadphase = new Ammo.btDbvtBroadphase();
+        const broadphase = new AmmoLib.btDbvtBroadphase();
 
         // Create constraint solver
-        const solver = new Ammo.btSequentialImpulseConstraintSolver();
+        const solver = new AmmoLib.btSequentialImpulseConstraintSolver();
 
         // Create physics world
-        physicsWorld = new Ammo.btDiscreteDynamicsWorld(
+        physicsWorld = new AmmoLib.btDiscreteDynamicsWorld(
             dispatcher,
             broadphase,
             solver,
@@ -242,7 +258,7 @@ function initPhysics() {
         );
 
         // Set gravity (negative Y in Three.js = down)
-        physicsWorld.setGravity(new Ammo.btVector3(0, -9.8, 0));
+        physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
 
         console.log('✅ Physics world created with gravity:', physicsWorld.getGravity().y());
 
@@ -255,10 +271,6 @@ function initPhysics() {
         // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
         physicsMeshMap = new Map();
         physicsMeshMap.set(bodyMainRef, rigidBodies.torso);
-        physicsMeshMap.set(leftArmRef, rigidBodies.leftArm);
-        physicsMeshMap.set(rightArmRef, rigidBodies.rightArm);
-        physicsMeshMap.set(leftLegRef, rigidBodies.leftLeg);
-        physicsMeshMap.set(rightLegRef, rigidBodies.rightLeg);
 
         console.log('🎮 Ammo.js jumping jack ready - move mouse to tilt, click to apply torque!');
         console.log('💡 Try clicking to apply torque and watch the physics simulation!');
