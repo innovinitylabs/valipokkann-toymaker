@@ -161,14 +161,17 @@ function initScene() {
         (gltf) => {
             toyGroupRef = gltf.scene;
 
-            // Enable shadows
+            // Enable shadows and count meshes
+            let totalMeshes = 0;
             toyGroupRef.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
+                    totalMeshes++;
                 }
             });
 
+            console.log(`🎭 GLTF loaded with ${totalMeshes} total meshes`);
             scene.add(toyGroupRef);
 
             // Find toy parts in the hierarchy
@@ -253,13 +256,19 @@ function findToyParts(object) {
         console.log('📍 Torso children:', bodyMainRef.children.length);
         
         // Find the actual mesh inside bodyMainRef to avoid duplicate rendering
+        let meshCount = 0;
         bodyMainRef.traverse((child) => {
-            if (child.isMesh && !bodyMainMesh) {
-                bodyMainMesh = child;
-                console.log('✅ Found torso mesh:', bodyMainMesh.name);
+            if (child.isMesh) {
+                meshCount++;
+                if (!bodyMainMesh) {
+                    bodyMainMesh = child;
+                    console.log('✅ Found torso mesh:', bodyMainMesh.name);
+                }
             }
         });
-        
+
+        console.log(`📊 bodyMainRef contains ${meshCount} meshes`);
+
         if (!bodyMainMesh) {
             console.warn('⚠️ No mesh found in bodyMainRef, will sync to group');
             bodyMainMesh = bodyMainRef; // Fallback to group
@@ -297,6 +306,18 @@ function findToyParts(object) {
         rightArm: !!rightArmRef,
         leftLeg: !!leftLegRef,
         rightLeg: !!rightLegRef
+    });
+
+    // Debug limb structure
+    [leftArmRef, rightArmRef, leftLegRef, rightLegRef].forEach((ref, index) => {
+        if (ref) {
+            const names = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+            let meshCount = 0;
+            ref.traverse((child) => {
+                if (child.isMesh) meshCount++;
+            });
+            console.log(`📊 ${names[index]} contains ${meshCount} meshes`);
+        }
     });
 }
 
@@ -782,9 +803,9 @@ function syncPhysicsToThree() {
                 return;
             }
 
-            // Physics body is at GLTF position, sync directly
-            bodyMainRef.position.set(p.x(), p.y(), p.z());
-            bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
+            // Sync to the actual mesh to avoid duplicate/hierarchical transform issues
+            bodyMainMesh.position.set(p.x(), p.y(), p.z());
+            bodyMainMesh.quaternion.set(q.x(), q.y(), q.z(), q.w());
         } else {
             console.warn('⚠️ Torso motion state is null');
         }
