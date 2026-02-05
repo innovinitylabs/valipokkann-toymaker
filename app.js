@@ -66,6 +66,13 @@ const pointLight = new THREE.PointLight(0xffffff, 0.5, 20);
 pointLight.position.set(0, 10, 0);
 scene.add(pointLight);
 
+// DEBUG GIZMOS - Coordinate system visualization
+// Global axes helper (shows world XYZ at origin)
+globalAxesHelper = new THREE.AxesHelper(2); // 2 units long
+globalAxesHelper.position.set(0, 0, 0);
+scene.add(globalAxesHelper);
+console.log('✅ Added global coordinate system gizmo (red=X, green=Y, blue=Z)');
+
 // GLTF Loader for r128
 const loader = new THREE.GLTFLoader();
 
@@ -115,6 +122,9 @@ let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty
 
 // Hinge pivot objects - positioned at constraint locations
 let leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot;
+
+// Debug gizmos for coordinate systems
+let globalAxesHelper, torsoAxesHelper, leftArmAxesHelper, rightArmAxesHelper;
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
 function initializeAmmo() {
@@ -259,6 +269,25 @@ function initScene() {
                 // Keep legs in world space for now (they might need different handling)
                 if (leftLegRef) scene.attach(leftLegRef);
                 if (rightLegRef) scene.attach(rightLegRef);
+            }
+
+            // Add coordinate system gizmos for debugging
+            if (bodyMainRef) {
+                torsoAxesHelper = new THREE.AxesHelper(1); // 1 unit long
+                bodyMainRef.add(torsoAxesHelper);
+                console.log('✅ Added torso coordinate system gizmo');
+            }
+
+            if (leftArmPivot) {
+                leftArmAxesHelper = new THREE.AxesHelper(0.5); // 0.5 units long
+                leftArmPivot.add(leftArmAxesHelper);
+                console.log('✅ Added left arm hinge coordinate system gizmo');
+            }
+
+            if (rightArmPivot) {
+                rightArmAxesHelper = new THREE.AxesHelper(0.5); // 0.5 units long
+                rightArmPivot.add(rightArmAxesHelper);
+                console.log('✅ Added right arm hinge coordinate system gizmo');
             }
 
             console.log('✅ Hinge pivots created:', {
