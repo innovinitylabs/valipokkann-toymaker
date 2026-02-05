@@ -49,6 +49,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="ammo.js"></script>
+    <script>
+        // Debug: Check if Ammo script executed
+        console.log('🔍 After ammo.js script tag - typeof Ammo:', typeof Ammo);
+        console.log('🔍 window.Ammo exists:', 'Ammo' in window);
+        if (typeof Ammo === 'function') {
+            console.log('✅ Ammo function available immediately');
+        } else {
+            console.log('⚠️ Ammo not available yet after script tag');
+        }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
