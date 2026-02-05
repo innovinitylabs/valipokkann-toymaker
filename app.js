@@ -102,12 +102,14 @@ loader.load(
         // Initialize physics after GLTF is loaded
         // Ammo.js should now be loaded from local file
         console.log('🔄 Initializing Ammo.js physics...');
+        console.log('🔍 Ammo type:', typeof Ammo, 'value:', Ammo);
 
         if (typeof Ammo === 'function') {
-            console.log('✅ Ammo.js function found, initializing...');
+            console.log('✅ Ammo.js function found, calling Ammo()...');
             Ammo().then((AmmoLib) => {
+                console.log('✅ Ammo() promise resolved, got AmmoLib');
                 Ammo = AmmoLib;
-                console.log('✅ Ammo.js library loaded, calling initPhysics()...');
+                console.log('✅ Ammo library assigned, calling initPhysics()...');
                 initPhysics();
                 physicsReady = true;
 
@@ -121,10 +123,12 @@ loader.load(
                 console.log('💡 Try clicking to apply torque and watch the physics simulation!');
             }).catch((error) => {
                 console.error('❌ Failed to initialize Ammo.js:', error);
+                console.error('Stack:', error.stack);
             });
         } else {
             console.error('❌ Ammo.js not available as function:', typeof Ammo);
-            console.error('💡 Local ammo.js file may not have loaded correctly');
+            console.error('💡 This means ammo.js script did not load properly');
+            console.error('💡 Check: 1) Web server running, 2) URL is http://127.0.0.1:8000/, 3) Hard refresh done');
         }
 
         console.log('GLTF loaded successfully');
