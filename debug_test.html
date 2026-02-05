@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ammo.js Debug Test</title>
+</head>
+<body>
+    <h1>Ammo.js Debug Test</h1>
+    <div id="status">Testing Ammo.js loading...</div>
+    <div id="result"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ammojs@0.0.2/ammo.js"></script>
+    <script>
+        console.log('=== AMMO.JS DEBUG TEST ===');
+        console.log('1. Window.Ammo available:', typeof window.Ammo);
+
+        if (typeof Ammo !== 'undefined') {
+            console.log('2. Ammo function found, calling...');
+            Ammo().then((AmmoLib) => {
+                console.log('3. ✅ Ammo.js loaded successfully!');
+                console.log('4. AmmoLib type:', typeof AmmoLib);
+                console.log('5. Available classes:');
+                console.log('   - btVector3:', !!AmmoLib.btVector3);
+                console.log('   - btBoxShape:', !!AmmoLib.btBoxShape);
+                console.log('   - btDiscreteDynamicsWorld:', !!AmmoLib.btDiscreteDynamicsWorld);
+                console.log('   - btHingeConstraint:', !!AmmoLib.btHingeConstraint);
+
+                document.getElementById('status').textContent = '✅ Ammo.js loaded successfully!';
+                document.getElementById('result').innerHTML = `
+                    <strong>Success!</strong><br>
+                    btVector3: ${!!AmmoLib.btVector3}<br>
+                    btBoxShape: ${!!AmmoLib.btBoxShape}<br>
+                    btDiscreteDynamicsWorld: ${!!AmmoLib.btDiscreteDynamicsWorld}<br>
+                    btHingeConstraint: ${!!AmmoLib.btHingeConstraint}
+                `;
+            }).catch((error) => {
+                console.error('3. ❌ Ammo.js loading failed:', error);
+                document.getElementById('status').textContent = '❌ Ammo.js loading failed!';
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        } else {
+            console.error('2. ❌ Ammo function not found');
+            document.getElementById('status').textContent = '❌ Ammo function not found!';
+        }
+    </script>
+</body>
+</html>
