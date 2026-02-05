@@ -74,6 +74,7 @@ let Ammo;
 let physicsWorld;
 let rigidBodies = {};
 let constraints = [];
+let physicsReady = false; // Flag to track when physics system is initialized
 
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy
@@ -108,6 +109,14 @@ loader.load(
                 Ammo = AmmoLib;
                 console.log('✅ Ammo.js library loaded, calling initPhysics()...');
                 initPhysics();
+                physicsReady = true;
+
+                // Hide loading indicator
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
+
                 console.log('🎮 Ammo.js physics initialized and ready!');
                 console.log('💡 Try clicking to apply torque and watch the physics simulation!');
             }).catch((error) => {
@@ -540,6 +549,12 @@ function onMouseMove(event) {
 function onMouseDown(event) {
     try {
         mousePressed = true;
+
+        // Check if physics system is ready
+        if (!physicsReady) {
+            console.log('⏳ Physics not ready yet - please wait for Ammo.js to load');
+            return;
+        }
 
         // Apply angular velocity to kinematic stick (manual integration)
         const dir = Math.random() > 0.5 ? 1 : -1;
