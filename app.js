@@ -80,6 +80,8 @@ let toyGroupRef; // Root group of the toy
 let bodyMainRef;
 let jointEmptyRef; // Blender Empty marking the stick-to-torso joint
 let leftArmRef, rightArmRef, leftLegRef, rightLegRef;
+// Joint constraint objects from Blender
+let leftHandConstraint, rightHandConstraint, leftLegConstraint, rightLegConstraint;
 let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty (for visual sync)
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
@@ -350,10 +352,10 @@ function findToyParts(object) {
     rightLegRef = findLimb(['right_leg', 'RightLeg', 'rightLeg', 'R_Leg', 'RLeg']);
 
     // Find constraint objects for joint positions
-    const leftHandConstraint = findCollectionInGLTF(object, 'Constraint_left_hand');
-    const rightHandConstraint = findCollectionInGLTF(object, 'Constraint_right_hand');
-    const leftLegConstraint = findCollectionInGLTF(object, 'Constraint_left_leg');
-    const rightLegConstraint = findCollectionInGLTF(object, 'Constraint_right_leg');
+    leftHandConstraint = findCollectionInGLTF(object, 'Constraint_left_hand');
+    rightHandConstraint = findCollectionInGLTF(object, 'Constraint_right_hand');
+    leftLegConstraint = findCollectionInGLTF(object, 'Constraint_left_leg');
+    rightLegConstraint = findCollectionInGLTF(object, 'Constraint_right_leg');
 
     console.log('📋 Limbs found:', {
         leftArm: !!leftArmRef,
