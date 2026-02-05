@@ -82,18 +82,45 @@ let bodyMainRef, leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 // HARD GATE: Wait for Ammo.js to be available, then initialize
 const waitForAmmo = () => {
     if (typeof Ammo !== 'undefined') {
-        console.log("🔍 Ammo object found, calling Ammo()...");
-        Ammo().then((AmmoInstance) => {
-            AmmoLib = AmmoInstance;
-            Ammo = AmmoInstance; // global alias for convenience
+        console.log("🔍 Ammo object found, inspecting:", Ammo);
+        console.log("🔍 Ammo keys:", Object.keys(Ammo));
+        console.log("🔍 Ammo.constructor:", Ammo.constructor);
 
-            console.log("✅ Ammo.js initialized");
-
-            // Load GLTF and initialize physics
-            loadGLTFAndInitPhysics();
-        }).catch((error) => {
-            console.error("❌ Ammo() promise failed:", error);
-        });
+        // Try different ways to initialize Ammo
+        if (typeof Ammo === 'function') {
+            console.log("✅ Ammo is a function, calling Ammo()...");
+            Ammo().then((AmmoInstance) => {
+                AmmoLib = AmmoInstance;
+                Ammo = AmmoInstance;
+                console.log("✅ Ammo.js initialized via function call");
+                loadGLTFAndInitPhysics();
+            }).catch((error) => {
+                console.error("❌ Ammo() promise failed:", error);
+            });
+        } else if (Ammo && typeof Ammo.then === 'function') {
+            console.log("✅ Ammo is a promise, awaiting...");
+            Ammo.then((AmmoInstance) => {
+                AmmoLib = AmmoInstance;
+                Ammo = AmmoInstance;
+                console.log("✅ Ammo.js initialized via promise");
+                loadGLTFAndInitPhysics();
+            }).catch((error) => {
+                console.error("❌ Ammo promise failed:", error);
+            });
+        } else if (Ammo && typeof Ammo.ready === 'function') {
+            console.log("✅ Ammo has ready method, calling...");
+            Ammo.ready().then((AmmoInstance) => {
+                AmmoLib = AmmoInstance;
+                Ammo = AmmoInstance;
+                console.log("✅ Ammo.js initialized via ready()");
+                loadGLTFAndInitPhysics();
+            }).catch((error) => {
+                console.error("❌ Ammo.ready() failed:", error);
+            });
+        } else {
+            console.error("❌ Ammo object found but no known initialization method");
+            console.error("Ammo object:", Ammo);
+        }
     } else {
         console.log("⏳ Ammo.js not loaded yet, waiting...");
         setTimeout(waitForAmmo, 100);
