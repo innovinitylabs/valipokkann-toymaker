@@ -274,6 +274,10 @@ function setupPhysicsBodies() {
         const headShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.2));
         torsoBody.addShape(headShape, new CANNON.Vec3(0, 1.4, 0));
 
+        // Shoulder collision extensions (prevents arm interpenetration)
+        const shoulderShape = new CANNON.Box(new CANNON.Vec3(0.45, 0.25, 0.25));
+        torsoBody.addShape(shoulderShape, new CANNON.Vec3(0, 0.9, 0));
+
         torsoBody.position.set(bodyWorldPos.x, bodyWorldPos.y, bodyWorldPos.z);
         torsoBody.quaternion.set(
             bodyWorldQuat.x,
@@ -392,9 +396,10 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
                 axisB: new CANNON.Vec3(1, 0, 0)
             });
-            leftArmConstraint.collideConnected = false; // Prevent self-collision
+            leftArmConstraint.collideConnected = true; // ENABLE collision between torso and arm
+            leftArmConstraint.setLimits(-Math.PI / 2, Math.PI / 2); // Mechanical limits
             world.addConstraint(leftArmConstraint);
-            console.log('✅ Created left arm hinge constraint connected to torso');
+            console.log('✅ Created left arm hinge constraint with collision and limits');
         }
 
         if (rightArmBody) {
@@ -418,9 +423,10 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
                 axisB: new CANNON.Vec3(1, 0, 0)
             });
-            rightArmConstraint.collideConnected = false; // Prevent self-collision
+            rightArmConstraint.collideConnected = true; // ENABLE collision between torso and arm
+            rightArmConstraint.setLimits(-Math.PI / 2, Math.PI / 2); // Mechanical limits
             world.addConstraint(rightArmConstraint);
-            console.log('✅ Created right arm hinge constraint connected to torso');
+            console.log('✅ Created right arm hinge constraint with collision and limits');
         }
 
         // Legs: hinge around Z-axis for left/right swing
@@ -445,9 +451,10 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
                 axisB: new CANNON.Vec3(0, 0, 1)
             });
-            leftLegConstraint.collideConnected = false; // Prevent self-collision
+            leftLegConstraint.collideConnected = true; // ENABLE collision between torso and leg
+            leftLegConstraint.setLimits(-Math.PI / 3, Math.PI / 3); // Tighter mechanical limits for legs
             world.addConstraint(leftLegConstraint);
-            console.log('✅ Created left leg hinge constraint connected to torso');
+            console.log('✅ Created left leg hinge constraint with collision and limits');
         }
 
         if (rightLegBody) {
@@ -471,9 +478,10 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
                 axisB: new CANNON.Vec3(0, 0, 1)
             });
-            rightLegConstraint.collideConnected = false; // Prevent self-collision
+            rightLegConstraint.collideConnected = true; // ENABLE collision between torso and leg
+            rightLegConstraint.setLimits(-Math.PI / 3, Math.PI / 3); // Tighter mechanical limits for legs
             world.addConstraint(rightLegConstraint);
-            console.log('✅ Created right leg hinge constraint connected to torso');
+            console.log('✅ Created right leg hinge constraint with collision and limits');
         }
 
         // Hinges alone are now sufficient with proper hierarchy
