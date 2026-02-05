@@ -185,31 +185,35 @@ function initScene() {
                 console.warn('💡 This could explain the static + moving mesh issue');
             }
 
-            // Hide loose duplicate meshes (not in groups)
+            // Hide loose duplicate meshes (not in groups) - only hide numbered duplicates
             toyGroupRef.traverse((child) => {
                 if (child.isMesh && child.parent === toyGroupRef) {
                     // This is a loose mesh directly under scene
                     const name = child.name || '';
-                    if (name.includes('_') && (name.includes('body_main') || name.includes('left_arm') ||
-                        name.includes('right_arm') || name.includes('left_leg') || name.includes('right_leg'))) {
-                        // This looks like a duplicate mesh, hide it
+                    // Only hide meshes that end with numbers (like mesh_1, mesh_2, etc.)
+                    // indicating they are duplicates
+                    if (name.match(/_(\d+)$/)) {
                         child.visible = false;
                         console.log(`👻 Hidden loose duplicate mesh: ${name}`);
                     }
                 }
             });
 
-            // List all meshes with their positions
-            console.log('📍 All mesh positions:');
+            // List all meshes with their positions and visibility
+            console.log('📍 All mesh positions after cleanup:');
             let meshIndex = 0;
+            let visibleCount = 0;
             toyGroupRef.traverse((child) => {
                 if (child.isMesh) {
                     meshIndex++;
                     const worldPos = new THREE.Vector3();
                     child.getWorldPosition(worldPos);
-                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})${child.visible ? '' : ' [HIDDEN]'}`);
+                    const visibility = child.visible ? 'VISIBLE' : 'HIDDEN';
+                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)}) [${visibility}]`);
+                    if (child.visible) visibleCount++;
                 }
             });
+            console.log(`🎭 Summary: ${visibleCount}/${meshIndex} meshes visible`);
             scene.add(toyGroupRef);
 
             // Find toy parts in the hierarchy
@@ -311,6 +315,7 @@ function findToyParts(object) {
         if (torsoMeshes.length > 0) {
             // Use first mesh for physics sync
             bodyMainMesh = torsoMeshes[0];
+            bodyMainMesh.visible = true; // Ensure it's visible
             console.log('✅ Using torso mesh for sync:', bodyMainMesh.name);
 
             // Hide duplicate meshes
@@ -669,7 +674,10 @@ function createConstraints() {
             }
         });
 
-        // Hide all but first mesh
+        // Keep first mesh visible, hide duplicates
+        if (limbMeshes.length > 0) {
+            limbMeshes[0].visible = true; // Ensure first mesh is visible
+        }
         for (let i = 1; i < limbMeshes.length; i++) {
             limbMeshes[i].visible = false;
             console.log(`👻 Hidden duplicate ${name} mesh: ${limbMeshes[i].name}`);
