@@ -195,12 +195,18 @@ function findToyParts(object) {
 
     // Find collections - we'll use the groups for physics, not individual meshes
     const collections = ['body_main', 'left_arm', 'right_arm', 'left_leg', 'right_leg'];
-    const refs = [bodyMainRef, leftArmRef, rightArmRef, leftLegRef, rightLegRef];
 
     collections.forEach((collectionName, index) => {
         const collection = findCollectionInGLTF(object, collectionName);
         if (collection) {
-            refs[index] = collection; // Use the group, not the mesh
+            // Assign to the correct global reference variable
+            switch (index) {
+                case 0: bodyMainRef = collection; break;
+                case 1: leftArmRef = collection; break;
+                case 2: rightArmRef = collection; break;
+                case 3: leftLegRef = collection; break;
+                case 4: rightLegRef = collection; break;
+            }
             foundParts[Object.keys(foundParts)[index]] = true;
             console.log(`✅ FOUND: ${collectionName} collection → using group for physics`);
         } else {
