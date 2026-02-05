@@ -258,12 +258,8 @@ function setupPhysicsBodies() {
         world.addBody(bodyBody);
         console.log('✅ Created kinematic body matching visual body_main');
 
-        // STEP 2: CREATE LIMB BODIES RELATIVE TO BODY
-        // All bodies share the same physics coordinate system
-
-        // Get body world position (should be ~0,0,0 after centering)
-        const bodyWorldPos = new THREE.Vector3();
-        toyGroupRef.getWorldPosition(bodyWorldPos);
+        // STEP 2: CREATE LIMB BODIES AT CONSTRAINT MARKER POSITIONS
+        // Use existing bodyWorldPos from kinematic body setup
 
         // Create dynamic bodies for arms at constraint marker positions
         const limbWorldPos = new THREE.Vector3();
