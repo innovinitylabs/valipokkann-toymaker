@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js Jumping Jack Toy</title>
+    <title>Ammo.js Jumping Jack Toy</title>
     <style>
         body {
             margin: 0;
@@ -35,16 +35,17 @@
 <body>
     <canvas id="canvas"></canvas>
     <div id="instructions">
-        <strong>Hybrid Spring-Damper Jumping Jack (glTF Y-up):</strong><br>
-        • Mouse X: tilt left/right (around Y-axis)<br>
-        • Mouse Y: tilt forward/back (around X-axis)<br>
-        • Click: add spin energy (asymmetric motion)<br>
+        <strong>Ammo.js Real Physics Jumping Jack:</strong><br>
+        • Mouse X: tilt left/right (physics-based)<br>
+        • Mouse Y: tilt forward/back (physics-based)<br>
+        • Click: apply real torque (centrifugal force)<br>
         • Scroll wheel to zoom in/out<br>
-        • Arms and legs move with organic asymmetry!
+        • Real rigid bodies, hinge constraints, gravity!
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ammo.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
