@@ -233,42 +233,67 @@ function setupPhysicsBodies() {
         // Connected using HINGE CONSTRAINTS with angular limits
 
         // STEP 1: DEFINE SINGLE PHYSICS ROOT FRAME
-        // Create kinematic body for stick/torso (the driver)
-        // BODY PHYSICS BODY MUST FOLLOW VISUAL BODY
-        bodyBody = new CANNON.Body({
-            type: CANNON.Body.KINEMATIC, // Kinematic - directly controlled, not affected by forces
-            mass: 0 // Mass doesn't matter for kinematic bodies
-        });
+        // SPLIT BODY INTO TWO PHYSICS BODIES FOR PROPER JUMPING JACK MECHANICS
 
-        // ADD COMPOUND COLLISION SHAPE to prevent limb interpenetration
-        // Central torso plank
-        const torsoShape = new CANNON.Box(new CANNON.Vec3(0.3, 1.0, 0.15));
-        bodyBody.addShape(torsoShape, new CANNON.Vec3(0, 0.3, 0));
-
-        // Head / face block
-        const headShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.2));
-        bodyBody.addShape(headShape, new CANNON.Vec3(0, 1.4, 0));
-
-        // Lower stick / handle
-        const stickShape = new CANNON.Box(new CANNON.Vec3(0.07, 1.2, 0.07));
-        bodyBody.addShape(stickShape, new CANNON.Vec3(0, -0.8, 0));
-
-        // Position bodyBody to match the visual body_main
+        // Position reference for both bodies
         const bodyWorldPos = new THREE.Vector3();
         const bodyWorldQuat = new THREE.Quaternion();
         toyGroupRef.getWorldPosition(bodyWorldPos);
         toyGroupRef.getWorldQuaternion(bodyWorldQuat);
 
-        bodyBody.position.set(bodyWorldPos.x, bodyWorldPos.y, bodyWorldPos.z);
-        bodyBody.quaternion.set(
+        // STEP 1: CREATE STICK DRIVER BODY (KINEMATIC)
+        stickBody = new CANNON.Body({
+            type: CANNON.Body.KINEMATIC, // Directly controlled by mouse
+            mass: 0
+        });
+
+        const stickShape = new CANNON.Box(new CANNON.Vec3(0.05, 1.4, 0.05));
+        stickBody.addShape(stickShape);
+
+        stickBody.position.set(bodyWorldPos.x, bodyWorldPos.y, bodyWorldPos.z);
+        stickBody.quaternion.set(
             bodyWorldQuat.x,
             bodyWorldQuat.y,
             bodyWorldQuat.z,
             bodyWorldQuat.w
         );
 
-        world.addBody(bodyBody);
-        console.log('✅ Created kinematic body with compound collision shapes');
+        world.addBody(stickBody);
+        console.log('✅ Created kinematic stick driver body');
+
+        // STEP 2: CREATE TORSO BODY (DYNAMIC)
+        torsoBody = new CANNON.Body({
+            mass: 3.0 // HEAVY compared to limbs for inertia
+        });
+
+        // Central torso plank
+        const torsoShape = new CANNON.Box(new CANNON.Vec3(0.35, 1.0, 0.2));
+        torsoBody.addShape(torsoShape, new CANNON.Vec3(0, 0.3, 0));
+
+        // Head / face block
+        const headShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.2));
+        torsoBody.addShape(headShape, new CANNON.Vec3(0, 1.4, 0));
+
+        torsoBody.position.set(bodyWorldPos.x, bodyWorldPos.y, bodyWorldPos.z);
+        torsoBody.quaternion.set(
+            bodyWorldQuat.x,
+            bodyWorldQuat.y,
+            bodyWorldQuat.z,
+            bodyWorldQuat.w
+        );
+
+        torsoBody.angularDamping = 0.2; // Mechanical damping
+        world.addBody(torsoBody);
+        console.log('✅ Created dynamic torso body with inertia');
+
+        // STEP 3: CONNECT STICK → TORSO
+        const stickTorsoLock = new CANNON.LockConstraint(stickBody, torsoBody);
+        stickTorsoLock.collideConnected = false;
+        world.addConstraint(stickTorsoLock);
+        console.log('✅ Connected stick driver to torso body');
+
+        // For backwards compatibility, set bodyBody to torsoBody
+        bodyBody = torsoBody;
 
         // STEP 2: CREATE LIMB BODIES AT CONSTRAINT MARKER POSITIONS
         // Use existing bodyWorldPos from kinematic body setup
@@ -361,7 +386,7 @@ function setupPhysicsBodies() {
             // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
-            leftArmConstraint = new CANNON.HingeConstraint(bodyBody, leftArmBody, {
+            leftArmConstraint = new CANNON.HingeConstraint(torsoBody, leftArmBody, {
                 pivotA: pivotA,
                 pivotB: pivotB,
                 axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
@@ -369,7 +394,7 @@ function setupPhysicsBodies() {
             });
             leftArmConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(leftArmConstraint);
-            console.log('✅ Created left arm hinge constraint with mechanical pivots');
+            console.log('✅ Created left arm hinge constraint connected to torso');
         }
 
         if (rightArmBody) {
@@ -387,7 +412,7 @@ function setupPhysicsBodies() {
             // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
-            rightArmConstraint = new CANNON.HingeConstraint(bodyBody, rightArmBody, {
+            rightArmConstraint = new CANNON.HingeConstraint(torsoBody, rightArmBody, {
                 pivotA: pivotA,
                 pivotB: pivotB,
                 axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
@@ -395,7 +420,7 @@ function setupPhysicsBodies() {
             });
             rightArmConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(rightArmConstraint);
-            console.log('✅ Created right arm hinge constraint with mechanical pivots');
+            console.log('✅ Created right arm hinge constraint connected to torso');
         }
 
         // Legs: hinge around Z-axis for left/right swing
@@ -414,7 +439,7 @@ function setupPhysicsBodies() {
             // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
-            leftLegConstraint = new CANNON.HingeConstraint(bodyBody, leftLegBody, {
+            leftLegConstraint = new CANNON.HingeConstraint(torsoBody, leftLegBody, {
                 pivotA: pivotA,
                 pivotB: pivotB,
                 axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
@@ -422,7 +447,7 @@ function setupPhysicsBodies() {
             });
             leftLegConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(leftLegConstraint);
-            console.log('✅ Created left leg hinge constraint with mechanical pivots');
+            console.log('✅ Created left leg hinge constraint connected to torso');
         }
 
         if (rightLegBody) {
@@ -440,7 +465,7 @@ function setupPhysicsBodies() {
             // Limb local pivot is its origin (pivotB)
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
-            rightLegConstraint = new CANNON.HingeConstraint(bodyBody, rightLegBody, {
+            rightLegConstraint = new CANNON.HingeConstraint(torsoBody, rightLegBody, {
                 pivotA: pivotA,
                 pivotB: pivotB,
                 axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
@@ -448,7 +473,7 @@ function setupPhysicsBodies() {
             });
             rightLegConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(rightLegConstraint);
-            console.log('✅ Created right leg hinge constraint with mechanical pivots');
+            console.log('✅ Created right leg hinge constraint connected to torso');
         }
 
         // Hinges alone are now sufficient with proper hierarchy
@@ -510,12 +535,12 @@ function onMouseDown(event) {
     try {
         mousePressed = true;
 
-        // CLICK BEHAVIOR: Spin around CURRENT LOCAL VERTICAL AXIS of the kinematic body
-        if (bodyBody) {
+        // CLICK BEHAVIOR: Spin the STICK DRIVER around its local vertical axis
+        if (stickBody) {
             const randomAngle = (Math.random() - 0.5) * Math.PI * 4; // Random angle between -2π and +2π
 
-            // Step 1: get current orientation
-            const q = bodyBody.quaternion;
+            // Step 1: get stick's current orientation
+            const q = stickBody.quaternion;
 
             // Step 2: compute local vertical axis in world space
             const worldSpinAxis = q.vmult(VERTICAL_AXIS);
@@ -527,10 +552,10 @@ function onMouseDown(event) {
             // Step 4: apply spin WITHOUT destroying tilt
             spinQuaternion = spinQuat.mult(spinQuaternion);
 
-            // Step 5: final orientation = spin × tilt
-            bodyBody.quaternion = spinQuaternion.mult(tiltQuaternion);
+            // Step 5: final orientation = spin × tilt (applied to stick)
+            stickBody.quaternion = spinQuaternion.mult(tiltQuaternion);
 
-            console.log('🎪 Spin around body\'s current local vertical axis!');
+            console.log('🎪 Spin applied to stick driver!');
         }
     } catch (error) {
         console.error('❌ Mouse down error:', error);
@@ -579,23 +604,23 @@ function updateToyInteraction() {
             // Combine tilt rotations: tiltQuaternion = yRotation × xRotation
             tiltQuaternion = yRotation.mult(xRotation);
 
-            // DRIVE KINEMATIC BODY WITH SMOOTH INTERPOLATION (allows physics impulses)
+            // DRIVE STICK BODY WITH SMOOTH INTERPOLATION (torso follows via constraint)
             const targetQuat = spinQuaternion.mult(tiltQuaternion);
 
             // Linear quaternion interpolation for Cannon.js (no built-in slerp)
             const slerpFactor = 0.15;
-            bodyBody.quaternion.x = bodyBody.quaternion.x * (1 - slerpFactor) + targetQuat.x * slerpFactor;
-            bodyBody.quaternion.y = bodyBody.quaternion.y * (1 - slerpFactor) + targetQuat.y * slerpFactor;
-            bodyBody.quaternion.z = bodyBody.quaternion.z * (1 - slerpFactor) + targetQuat.z * slerpFactor;
-            bodyBody.quaternion.w = bodyBody.quaternion.w * (1 - slerpFactor) + targetQuat.w * slerpFactor;
+            stickBody.quaternion.x = stickBody.quaternion.x * (1 - slerpFactor) + targetQuat.x * slerpFactor;
+            stickBody.quaternion.y = stickBody.quaternion.y * (1 - slerpFactor) + targetQuat.y * slerpFactor;
+            stickBody.quaternion.z = stickBody.quaternion.z * (1 - slerpFactor) + targetQuat.z * slerpFactor;
+            stickBody.quaternion.w = stickBody.quaternion.w * (1 - slerpFactor) + targetQuat.w * slerpFactor;
 
             // Normalize to prevent drift
-            const len = Math.sqrt(bodyBody.quaternion.x**2 + bodyBody.quaternion.y**2 + bodyBody.quaternion.z**2 + bodyBody.quaternion.w**2);
+            const len = Math.sqrt(stickBody.quaternion.x**2 + stickBody.quaternion.y**2 + stickBody.quaternion.z**2 + stickBody.quaternion.w**2);
             if (len > 0) {
-                bodyBody.quaternion.x /= len;
-                bodyBody.quaternion.y /= len;
-                bodyBody.quaternion.z /= len;
-                bodyBody.quaternion.w /= len;
+                stickBody.quaternion.x /= len;
+                stickBody.quaternion.y /= len;
+                stickBody.quaternion.z /= len;
+                stickBody.quaternion.w /= len;
             }
         }
     } catch (error) {
@@ -617,10 +642,10 @@ function animate() {
             // SYNC RULE: Each animation frame copy Cannon body position + quaternion → matching Three.js object
             // Do NOT modify Three.js transforms directly - physics bodies drive everything
 
-            // Sync kinematic driver (stick/torso) to Three.js group
-            if (toyGroupRef) {
-                toyGroupRef.position.copy(bodyBody.position);
-                toyGroupRef.quaternion.copy(bodyBody.quaternion);
+            // Sync visual body_main to follow the TORSO (with inertia)
+            if (toyGroupRef && torsoBody) {
+                toyGroupRef.position.copy(torsoBody.position);
+                toyGroupRef.quaternion.copy(torsoBody.quaternion);
             }
 
             // Sync dynamic limbs (arms and legs follow physics)
