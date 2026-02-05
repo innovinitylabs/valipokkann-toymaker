@@ -233,13 +233,25 @@ function setupPhysicsBodies() {
         // Connected using HINGE CONSTRAINTS with angular limits
 
         // STEP 1: DEFINE SINGLE PHYSICS ROOT FRAME
-        // Create single kinematic body for stick/torso (the driver)
+        // Create kinematic body for stick/torso (the driver)
         // BODY PHYSICS BODY MUST FOLLOW VISUAL BODY
         bodyBody = new CANNON.Body({
             type: CANNON.Body.KINEMATIC, // Kinematic - directly controlled, not affected by forces
             mass: 0 // Mass doesn't matter for kinematic bodies
         });
-        bodyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 1, 0.05)));
+
+        // ADD COMPOUND COLLISION SHAPE to prevent limb interpenetration
+        // Central torso plank
+        const torsoShape = new CANNON.Box(new CANNON.Vec3(0.3, 1.0, 0.15));
+        bodyBody.addShape(torsoShape, new CANNON.Vec3(0, 0.3, 0));
+
+        // Head / face block
+        const headShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.2));
+        bodyBody.addShape(headShape, new CANNON.Vec3(0, 1.4, 0));
+
+        // Lower stick / handle
+        const stickShape = new CANNON.Box(new CANNON.Vec3(0.07, 1.2, 0.07));
+        bodyBody.addShape(stickShape, new CANNON.Vec3(0, -0.8, 0));
 
         // Position bodyBody to match the visual body_main
         const bodyWorldPos = new THREE.Vector3();
@@ -256,7 +268,7 @@ function setupPhysicsBodies() {
         );
 
         world.addBody(bodyBody);
-        console.log('✅ Created kinematic body matching visual body_main');
+        console.log('✅ Created kinematic body with compound collision shapes');
 
         // STEP 2: CREATE LIMB BODIES AT CONSTRAINT MARKER POSITIONS
         // Use existing bodyWorldPos from kinematic body setup
