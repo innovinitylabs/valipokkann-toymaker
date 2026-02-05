@@ -185,8 +185,13 @@ function initScene() {
                     // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
                     physicsMeshMap = new Map();
                     physicsMeshMap.set(bodyMainRef, rigidBodies.torso);
+                    if (leftArmRef && rigidBodies.leftArm) physicsMeshMap.set(leftArmRef, rigidBodies.leftArm);
+                    if (rightArmRef && rigidBodies.rightArm) physicsMeshMap.set(rightArmRef, rigidBodies.rightArm);
+                    if (leftLegRef && rigidBodies.leftLeg) physicsMeshMap.set(leftLegRef, rigidBodies.leftLeg);
+                    if (rightLegRef && rigidBodies.rightLeg) physicsMeshMap.set(rightLegRef, rigidBodies.rightLeg);
                     
                     console.log('🎮 Motor-based jumping jack ready - move mouse to tilt, click to spin!');
+                    console.log(`📊 Physics bodies: ${Object.keys(rigidBodies).filter(k => rigidBodies[k]).length} total`);
                 } else {
                     console.error('❌ Failed to create physics bodies - cannot create constraints');
                 }
@@ -416,9 +421,62 @@ function createRigidBodies() {
         console.log(`✅ Created dynamic torso body (mass: ${mass}, angular damping: 0.2, size: ${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)})`);
     }
 
+    // Create limbs (arms and legs)
+    const limbs = [
+        { name: 'leftArm', ref: leftArmRef, mass: 0.5 },
+        { name: 'rightArm', ref: rightArmRef, mass: 0.5 },
+        { name: 'leftLeg', ref: leftLegRef, mass: 0.7 },
+        { name: 'rightLeg', ref: rightLegRef, mass: 0.7 }
+    ];
+
+    limbs.forEach(({ name, ref, mass }) => {
+        if (!ref) {
+            console.log(`⚠️ Skipping ${name} - reference not found`);
+            return;
+        }
+
+        // Get world transform
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        ref.getWorldPosition(worldPos);
+        ref.getWorldQuaternion(worldQuat);
+
+        // Approximate box shape from bounds
+        const bbox = new THREE.Box3().setFromObject(ref);
+        const size = bbox.getSize(new THREE.Vector3());
+        const halfExtents = new AmmoLib.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
+
+        const shape = new AmmoLib.btBoxShape(halfExtents);
+
+        // Calculate local inertia
+        const localInertia = new AmmoLib.btVector3(0, 0, 0);
+        shape.calculateLocalInertia(mass, localInertia);
+
+        // Create motion state
+        const transform = new AmmoLib.btTransform();
+        transform.setIdentity();
+        transform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+        transform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
+
+        const motionState = new AmmoLib.btDefaultMotionState(transform);
+        const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+
+        rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
+        rigidBodies[name].setDamping(0.1, 0.2);
+        rigidBodies[name].setActivationState(4);
+        rigidBodies[name].setSleepingThresholds(0, 0);
+
+        physicsWorld.addRigidBody(rigidBodies[name]);
+        console.log(`✅ Created ${name} body (mass: ${mass})`);
+    });
+
     console.log('📊 Rigid bodies summary:', {
         anchor: !!rigidBodies.anchor,
-        torso: !!rigidBodies.torso
+        torso: !!rigidBodies.torso,
+        leftArm: !!rigidBodies.leftArm,
+        rightArm: !!rigidBodies.rightArm,
+        leftLeg: !!rigidBodies.leftLeg,
+        rightLeg: !!rigidBodies.rightLeg
     });
 }
 
@@ -482,6 +540,71 @@ function createConstraints() {
 
     console.log('✅ Created hinge constraint with motor: spinHinge');
     console.log(`   Target speed: ${targetSpeed}, Max torque: ${maxTorque}`);
+
+    // Create limb constraints (passive hinges, no motors)
+    const limbs = [
+        { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm },
+        { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm },
+        { name: 'leftLeg', ref: leftLegRef, body: rigidBodies.leftLeg },
+        { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg }
+    ];
+
+    limbs.forEach(({ name, ref, body }) => {
+        if (!body || !ref) {
+            console.log(`⚠️ Skipping constraint for ${name} - body or reference missing`);
+            return;
+        }
+
+        // Get joint position (use limb origin as joint)
+        const jointWorld = new THREE.Vector3();
+        ref.getWorldPosition(jointWorld);
+
+        // Get torso physics body world position
+        const torsoTransform = new AmmoLib.btTransform();
+        rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
+        const torsoOrigin = torsoTransform.getOrigin();
+
+        // Get limb physics body world position
+        const limbTransform = new AmmoLib.btTransform();
+        body.getMotionState().getWorldTransform(limbTransform);
+        const limbOrigin = limbTransform.getOrigin();
+
+        // Convert to local spaces
+        const pivotA = new AmmoLib.btVector3(
+            jointWorld.x - torsoOrigin.x(),
+            jointWorld.y - torsoOrigin.y(),
+            jointWorld.z - torsoOrigin.z()
+        );
+
+        const pivotB = new AmmoLib.btVector3(
+            jointWorld.x - limbOrigin.x(),
+            jointWorld.y - limbOrigin.y(),
+            jointWorld.z - limbOrigin.z()
+        );
+
+        // Create hinge constraint (Z-axis for side-to-side swing)
+        const hinge = new AmmoLib.btHingeConstraint(
+            rigidBodies.torso,
+            body,
+            pivotA,
+            pivotB,
+            new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis for side swing
+            new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
+            true
+        );
+
+        // Set angle limits (±60 degrees)
+        const maxAngle = Math.PI / 3;
+        hinge.setLimit(-maxAngle, maxAngle);
+
+        // Add to physics world (disable collisions between connected bodies)
+        physicsWorld.addConstraint(hinge, false);
+
+        // Store constraint
+        constraints[name] = hinge;
+
+        console.log(`✅ Created hinge constraint: ${name}`);
+    });
 }
 
 // Mouse interaction variables
@@ -658,6 +781,29 @@ function syncPhysicsToThree() {
             bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
         }
     }
+
+    // Sync limbs from physics to Three.js
+    const limbs = [
+        { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm },
+        { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm },
+        { name: 'leftLeg', ref: leftLegRef, body: rigidBodies.leftLeg },
+        { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg }
+    ];
+
+    limbs.forEach(({ name, ref, body }) => {
+        if (body && ref) {
+            const motionState = body.getMotionState();
+            if (motionState) {
+                motionState.getWorldTransform(tmpTrans);
+
+                const p = tmpTrans.getOrigin();
+                const q = tmpTrans.getRotation();
+
+                ref.position.set(p.x(), p.y(), p.z());
+                ref.quaternion.set(q.x(), q.y(), q.z(), q.w());
+            }
+        }
+    });
 
     // Anchor is kinematic and doesn't need syncing back to Three.js
     // (it only moves based on cursor input)
