@@ -862,16 +862,11 @@ function syncPhysicsToThree() {
             const p = tmpTrans.getOrigin();
             const q = tmpTrans.getRotation();
 
-            // Debug: check if values are valid
+            // Check if values are valid
             if (isNaN(p.x()) || isNaN(p.y()) || isNaN(p.z())) {
                 console.warn('⚠️ Invalid physics position, skipping sync');
                 return;
             }
-
-            // Debug: log sync operation
-            const beforePos = new THREE.Vector3();
-            bodyMainRef.getWorldPosition(beforePos);
-            console.log(`🔄 Syncing torso: (${beforePos.x.toFixed(3)}, ${beforePos.y.toFixed(3)}, ${beforePos.z.toFixed(3)}) → (${p.x().toFixed(3)}, ${p.y().toFixed(3)}, ${p.z().toFixed(3)})`);
 
             // Sync to the group - groups handle hierarchical transforms correctly
             bodyMainRef.position.set(p.x(), p.y(), p.z());
