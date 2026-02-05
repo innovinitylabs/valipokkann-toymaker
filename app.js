@@ -371,6 +371,43 @@ function findToyParts(object) {
         rightLeg: !!rightLegConstraint
     });
 
+    // Debug: Show positions of constraints vs limbs vs torso
+    if (bodyMainRef) {
+        const torsoPos = new THREE.Vector3();
+        bodyMainRef.getWorldPosition(torsoPos);
+        console.log(`📍 Torso position: (${torsoPos.x.toFixed(3)}, ${torsoPos.y.toFixed(3)}, ${torsoPos.z.toFixed(3)})`);
+    }
+
+    const constraints = [
+        { name: 'leftHand', obj: leftHandConstraint },
+        { name: 'rightHand', obj: rightHandConstraint },
+        { name: 'leftLeg', obj: leftLegConstraint },
+        { name: 'rightLeg', obj: rightLegConstraint }
+    ];
+
+    constraints.forEach(({ name, obj }) => {
+        if (obj) {
+            const pos = new THREE.Vector3();
+            obj.getWorldPosition(pos);
+            console.log(`📍 ${name} constraint: (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})`);
+        }
+    });
+
+    const limbs = [
+        { name: 'leftArm', obj: leftArmRef },
+        { name: 'rightArm', obj: rightArmRef },
+        { name: 'leftLeg', obj: leftLegRef },
+        { name: 'rightLeg', obj: rightLegRef }
+    ];
+
+    limbs.forEach(({ name, obj }) => {
+        if (obj) {
+            const pos = new THREE.Vector3();
+            obj.getWorldPosition(pos);
+            console.log(`📍 ${name} limb: (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})`);
+        }
+    });
+
     // Show which names were found
     const limbRefs = { leftArmRef, rightArmRef, leftLegRef, rightLegRef };
     Object.entries(limbRefs).forEach(([key, ref]) => {
@@ -551,7 +588,7 @@ function createRigidBodies() {
         rigidBodies[name].setSleepingThresholds(0, 0);
 
         physicsWorld.addRigidBody(rigidBodies[name]);
-        console.log(`✅ Created ${name} body (mass: ${mass})`);
+        console.log(`✅ Created ${name} body (mass: ${mass}) at (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
     });
 
     console.log('📊 Rigid bodies summary:', {
@@ -715,7 +752,12 @@ function createConstraints() {
         // Store constraint
         constraints[name] = hinge;
 
-        console.log(`✅ Created hinge constraint: ${name} at joint position (${jointWorld.x.toFixed(3)}, ${jointWorld.y.toFixed(3)}, ${jointWorld.z.toFixed(3)})`);
+        console.log(`✅ Created hinge constraint: ${name}`);
+        console.log(`   Joint: (${jointWorld.x.toFixed(3)}, ${jointWorld.y.toFixed(3)}, ${jointWorld.z.toFixed(3)})`);
+        console.log(`   Torso origin: (${torsoOrigin.x().toFixed(3)}, ${torsoOrigin.y().toFixed(3)}, ${torsoOrigin.z().toFixed(3)})`);
+        console.log(`   Limb origin: (${limbOrigin.x().toFixed(3)}, ${limbOrigin.y().toFixed(3)}, ${limbOrigin.z().toFixed(3)})`);
+        console.log(`   Pivot A (torso local): (${pivotA.x().toFixed(3)}, ${pivotA.y().toFixed(3)}, ${pivotA.z().toFixed(3)})`);
+        console.log(`   Pivot B (limb local): (${pivotB.x().toFixed(3)}, ${pivotB.y().toFixed(3)}, ${pivotB.z().toFixed(3)})`);
     });
 }
 
