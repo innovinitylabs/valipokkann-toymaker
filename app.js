@@ -668,7 +668,12 @@ function createRigidBodies() {
             throw new Error("❌ Failed to create torso rigid body!");
         }
 
-        // Set activation state - no kinematic flags
+        // TEMPORARY: Make kinematic so it follows mesh during manual control
+        rigidBodies.torso.setCollisionFlags(
+            rigidBodies.torso.getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
+        );
+
+        // Set activation state
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
 
         // Add to physics world
@@ -730,6 +735,12 @@ function createRigidBodies() {
         const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
 
         rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
+
+        // TEMPORARY: Make kinematic so they follow mesh during manual control
+        rigidBodies[name].setCollisionFlags(
+            rigidBodies[name].getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
+        );
+
         rigidBodies[name].setDamping(0.1, 0.2);
         rigidBodies[name].setActivationState(4);
         rigidBodies[name].setSleepingThresholds(0, 0);
@@ -1052,6 +1063,9 @@ function animate(currentTime = 0) {
                 rightLegRef.rotation.y = 0;
                 rightLegRef.rotation.z = -legSwingAngle; // Opposite direction, Z-axis hinge
             }
+
+            // Sync kinematic rigid bodies with mesh positions
+            syncKinematicRigidBodies();
         }
 
         // COMMENTED OUT PHYSICS SYNC
@@ -1065,6 +1079,62 @@ function animate(currentTime = 0) {
         requestAnimationFrame(animate);
         renderer.render(scene, camera);
     }
+}
+
+// Sync kinematic rigid bodies with mesh positions during manual control
+function syncKinematicRigidBodies() {
+    if (!AmmoLib) return;
+
+    const tmpTrans = new AmmoLib.btTransform();
+
+    // Sync torso
+    if (rigidBodies.torso && bodyMainRef && (rigidBodies.torso.getCollisionFlags() & 2)) {
+        try {
+            const worldPos = new THREE.Vector3();
+            const worldQuat = new THREE.Quaternion();
+            bodyMainRef.getWorldPosition(worldPos);
+            bodyMainRef.getWorldQuaternion(worldQuat);
+
+            tmpTrans.setIdentity();
+            tmpTrans.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+            tmpTrans.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
+
+            rigidBodies.torso.getMotionState().setWorldTransform(tmpTrans);
+            rigidBodies.torso.setActivationState(4);
+        } catch (e) {
+            console.error('❌ Error syncing torso kinematic body:', e);
+        }
+    }
+
+    // Sync limbs from Three.js meshes to kinematic rigid bodies
+    const limbs = [
+        { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm },
+        { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm },
+        { name: 'leftLeg', ref: leftLegRef, body: rigidBodies.leftLeg },
+        { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg }
+    ];
+
+    limbs.forEach(({ name, ref, body }) => {
+        if (body && ref && (body.getCollisionFlags() & 2)) { // Check if kinematic
+            try {
+                // Get world position and rotation from Three.js mesh
+                const worldPos = new THREE.Vector3();
+                const worldQuat = new THREE.Quaternion();
+                ref.getWorldPosition(worldPos);
+                ref.getWorldQuaternion(worldQuat);
+
+                // Update kinematic rigid body transform
+                tmpTrans.setIdentity();
+                tmpTrans.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+                tmpTrans.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
+
+                body.getMotionState().setWorldTransform(tmpTrans);
+                body.setActivationState(4); // DISABLE_DEACTIVATION
+            } catch (e) {
+                console.error(`❌ Error syncing ${name} kinematic body:`, e);
+            }
+        }
+    });
 }
 
 // COMMENTED OUT PHYSICS SYNC - USING MANUAL CONTROL
