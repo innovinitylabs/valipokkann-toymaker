@@ -234,15 +234,19 @@ function initScene() {
             // Find toy parts in the hierarchy
             findToyParts(toyGroupRef);
 
-            // 🔧 FIX: Detach limbs to world space to avoid local/world transform mismatch
-            if (leftArmRef) scene.attach(leftArmRef);
-            if (rightArmRef) scene.attach(rightArmRef);
-            if (leftLegRef) scene.attach(leftLegRef);
-            if (rightLegRef) scene.attach(rightLegRef);
+            // 🔧 MANUAL CONTROL: Attach arms to torso for local hinge rotation
+            // Keep legs in world space for now (they might need different handling)
+            if (bodyMainRef) {
+                if (leftArmRef) bodyMainRef.attach(leftArmRef);
+                if (rightArmRef) bodyMainRef.attach(rightArmRef);
+                // Keep legs in world space for now
+                if (leftLegRef) scene.attach(leftLegRef);
+                if (rightLegRef) scene.attach(rightLegRef);
+            }
 
-            console.log('✅ Limbs detached to world space:', {
-                leftArm: leftArmRef?.parent === scene,
-                rightArm: rightArmRef?.parent === scene,
+            console.log('✅ Limbs attached for hinge control:', {
+                leftArm: leftArmRef?.parent === bodyMainRef,
+                rightArm: rightArmRef?.parent === bodyMainRef,
                 leftLeg: leftLegRef?.parent === scene,
                 rightLeg: rightLegRef?.parent === scene
             });
@@ -928,29 +932,37 @@ function animate(currentTime = 0) {
             console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
         }
 
-        // MANUAL HINGE CONTROL - Direct arm rotation based on mouse
-        if (leftArmRef && rightArmRef) {
+        // MANUAL HINGE CONTROL - Direct arm rotation in torso's local XY plane
+        if (bodyMainRef) {
             // Smooth interpolation to target position
             currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 2;
             currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 2;
 
             // Convert mouse position to hinge angles (in radians)
-            const maxAngle = Math.PI / 3; // 60 degrees max swing
-            const leftArmAngle = currentAnchorX * maxAngle;   // X controls left arm
-            const rightArmAngle = -currentAnchorX * maxAngle; // X controls right arm (opposite)
-            const legSwingAngle = currentAnchorZ * maxAngle;  // Z controls leg swing
+            const maxArmAngle = Math.PI / 2; // 90 degrees max arm swing
+            const maxLegAngle = Math.PI / 4; // 45 degrees max leg swing
 
-            // Apply hinge rotation to left arm (Y-axis hinge)
+            // Arms swing in torso's local XY plane (around X-axis for up-down swing)
+            const leftArmAngle = currentAnchorX * maxArmAngle;   // X mouse controls left arm
+            const rightArmAngle = currentAnchorX * maxArmAngle;  // X mouse controls right arm (same direction for jumping jack)
+            const armVerticalAngle = currentAnchorZ * maxArmAngle; // Y mouse controls vertical swing
+
+            // Legs swing in world space for now
+            const legSwingAngle = currentAnchorZ * maxLegAngle;
+
+            // Apply local hinge rotation to arms (around X-axis for horizontal swing in XY plane)
             if (leftArmRef) {
-                leftArmRef.rotation.y = leftArmAngle;
+                leftArmRef.rotation.x = leftArmAngle;
+                leftArmRef.rotation.y = 0; // Reset other axes
+                leftArmRef.rotation.z = 0;
             }
-
-            // Apply hinge rotation to right arm (Y-axis hinge)
             if (rightArmRef) {
-                rightArmRef.rotation.y = rightArmAngle;
+                rightArmRef.rotation.x = rightArmAngle;
+                rightArmRef.rotation.y = 0; // Reset other axes
+                rightArmRef.rotation.z = 0;
             }
 
-            // Apply hinge rotation to legs (Y-axis hinge)
+            // Apply world hinge rotation to legs (around Y-axis)
             if (leftLegRef) {
                 leftLegRef.rotation.y = legSwingAngle;
             }
