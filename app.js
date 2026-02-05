@@ -513,6 +513,8 @@ let stickAngularVelocity = 0;
 let stickAngle = 0;
 let stickTiltX = 0;
 let stickTiltZ = 0;
+let targetStickTiltX = 0;
+let targetStickTiltZ = 0;
 
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
@@ -572,13 +574,9 @@ function onMouseWheel(event) {
 // Update toy interaction based on mouse position
 function updateToyInteraction() {
     try {
-        // Update stick tilt based on mouse position
-        const targetTiltX = mouse.y * 0.5; // Reduced tilt range
-        const targetTiltZ = -mouse.x * 0.5;
-
-        // Smooth tilt interpolation
-        stickTiltX += (targetTiltX - stickTiltX) * delta * 2;
-        stickTiltZ += (targetTiltZ - stickTiltZ) * delta * 2;
+        // Just update target tilt angles - interpolation happens in animation loop
+        targetStickTiltX = mouse.y * 0.5; // Reduced tilt range
+        targetStickTiltZ = -mouse.x * 0.5;
     } catch (error) {
         console.error('❌ Toy interaction error:', error);
     }
@@ -600,6 +598,10 @@ function animate(currentTime = 0) {
             // Manually integrate kinematic stick rotation
             stickAngle += stickAngularVelocity * delta;
             stickAngularVelocity *= 0.98; // Damping
+
+            // Smooth tilt interpolation
+            stickTiltX += (targetStickTiltX - stickTiltX) * delta * 2;
+            stickTiltZ += (targetStickTiltZ - stickTiltZ) * delta * 2;
 
             // Create combined rotation (spin + tilt)
             const spinQuat = new THREE.Quaternion();
