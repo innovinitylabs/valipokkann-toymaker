@@ -79,16 +79,28 @@ let constraints = [];
 let toyGroupRef; // Root group of the toy
 let bodyMainRef, leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 
-// HARD GATE: Wait for Ammo.js to initialize, then start everything
-Ammo().then((AmmoInstance) => {
-    AmmoLib = AmmoInstance;
-    Ammo = AmmoInstance; // global alias for convenience
+// HARD GATE: Wait for Ammo.js to be available, then initialize
+const waitForAmmo = () => {
+    if (typeof Ammo === 'function') {
+        console.log("🔍 Ammo function found, calling Ammo()...");
+        Ammo().then((AmmoInstance) => {
+            AmmoLib = AmmoInstance;
+            Ammo = AmmoInstance; // global alias for convenience
 
-    console.log("✅ Ammo.js initialized");
+            console.log("✅ Ammo.js initialized");
 
-    // Load GLTF and initialize physics
-    loadGLTFAndInitPhysics();
-});
+            // Load GLTF and initialize physics
+            loadGLTFAndInitPhysics();
+        }).catch((error) => {
+            console.error("❌ Ammo() promise failed:", error);
+        });
+    } else {
+        console.log("⏳ Ammo.js not loaded yet, waiting...");
+        setTimeout(waitForAmmo, 100);
+    }
+};
+
+waitForAmmo();
 
 // Load GLTF model and initialize physics
 function loadGLTFAndInitPhysics() {
