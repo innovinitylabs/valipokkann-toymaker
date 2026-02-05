@@ -507,13 +507,21 @@ function createRigidBodies() {
         // Approximate box shape from group bounds
         const bbox = new THREE.Box3().setFromObject(bodyMainRef);
         const size = bbox.getSize(new THREE.Vector3());
+
+        // Debug: Validate torso size
+        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z) ||
+            size.x <= 0 || size.y <= 0 || size.z <= 0) {
+            console.error('❌ Invalid torso bounding box size:', size.x, size.y, size.z);
+            return;
+        }
+
         const halfExtents = new AmmoLib.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
 
         // Create box shape
         const torsoShape = new AmmoLib.btBoxShape(halfExtents);
 
         // Calculate local inertia (mass = 2.0)
-        const mass = 2.0;
+        const mass = 0; // Kinematic for pendulum debugging
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         torsoShape.calculateLocalInertia(mass, localInertia);
 
@@ -531,15 +539,14 @@ function createRigidBodies() {
         // Create rigid body
         rigidBodies.torso = new AmmoLib.btRigidBody(rbInfo);
 
-        // Set angular damping ~0.2
-        rigidBodies.torso.setDamping(0.1, 0.2); // linear, angular damping
+        // Make kinematic (CF_KINEMATIC_OBJECT) - controlled by us, not physics
+        rigidBodies.torso.setCollisionFlags(2); // CF_KINEMATIC_OBJECT
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
-        rigidBodies.torso.setSleepingThresholds(0, 0);
 
         // Add to physics world
         physicsWorld.addRigidBody(rigidBodies.torso);
 
-        console.log(`✅ Created dynamic torso body (mass: ${mass}, angular damping: 0.2, size: ${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)})`);
+        console.log(`✅ Created kinematic torso body (controlled by mouse, mass: ${mass}, size: ${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)})`);
     }
 
     // Create limbs (arms and legs)
@@ -565,6 +572,14 @@ function createRigidBodies() {
         // Approximate box shape from bounds
         const bbox = new THREE.Box3().setFromObject(ref);
         const size = bbox.getSize(new THREE.Vector3());
+
+        // Debug: Validate size
+        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z) ||
+            size.x <= 0 || size.y <= 0 || size.z <= 0) {
+            console.error('❌ Invalid bounding box size for', name, ':', size.x, size.y, size.z);
+            return;
+        }
+
         const halfExtents = new AmmoLib.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
 
         const shape = new AmmoLib.btBoxShape(halfExtents);
@@ -573,13 +588,14 @@ function createRigidBodies() {
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         shape.calculateLocalInertia(mass, localInertia);
 
-        // Create motion state
-        const transform = new AmmoLib.btTransform();
-        transform.setIdentity();
-        transform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
-        transform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
+        // Create initial transform
+        const initialTransform = new AmmoLib.btTransform();
+        initialTransform.setIdentity();
+        initialTransform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+        initialTransform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
 
-        const motionState = new AmmoLib.btDefaultMotionState(transform);
+        // Create motion state with initial transform
+        const motionState = new AmmoLib.btDefaultMotionState(initialTransform);
         const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
 
         rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
@@ -620,59 +636,59 @@ function createConstraints() {
         return;
     }
 
-    if (!jointEmptyRef) {
-        console.error('❌ Cannot create constraints - joint Empty not found');
-        return;
-    }
+    // Skip joint Empty and bodyMainRef checks for pendulum-only debugging
+    // if (!jointEmptyRef) {
+    //     console.error('❌ Cannot create constraints - joint Empty not found');
+    //     return;
+    // }
 
-    if (!bodyMainRef) {
-        console.error('❌ Cannot create constraints - bodyMainRef not found');
-        return;
-    }
+    // if (!bodyMainRef) {
+    //     console.error('❌ Cannot create constraints - bodyMainRef not found');
+    //     return;
+    // }
 
-    // STEP 5: ANCHOR ↔ TORSO HINGE WITH MOTOR
-    // pivotA = anchor origin (0, 0, 0) - anchor is already aligned to joint Empty
-    // pivotB = torso local pivot computed from Empty world position
-    // axis = vertical (Y)
+    // STEP 5: ANCHOR ↔ TORSO HINGE WITH MOTOR - DISABLED FOR DEBUGGING
+    // // pivotA = anchor origin (0, 0, 0) - anchor is already aligned to joint Empty
+    // // pivotB = torso local pivot computed from Empty world position
+    // // axis = vertical (Y)
 
-    // STEP 4: COMPUTE TORSO LOCAL PIVOT FROM EMPTY
-    // Physics body is at GLTF position, pivot is offset to Empty position
-    const jointWorld = new THREE.Vector3();
-    jointEmptyRef.getWorldPosition(jointWorld);
+    // // STEP 4: COMPUTE TORSO LOCAL PIVOT FROM EMPTY
+    // // Physics body is at GLTF position, pivot is offset to Empty position
+    // const jointWorld = new THREE.Vector3();
+    // jointEmptyRef.getWorldPosition(jointWorld);
 
-    // Get torso physics body world position (should be GLTF position)
-    const torsoTransform = new AmmoLib.btTransform();
-    rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
-    const torsoOrigin = torsoTransform.getOrigin();
+    // // Get torso physics body world position (should be GLTF position)
+    // const torsoTransform = new AmmoLib.btTransform();
+    // rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
+    // const torsoOrigin = torsoTransform.getOrigin();
 
-    // Pivot is the offset from physics body to Empty (joint)
-    const pivotB = new AmmoLib.btVector3(
-        jointWorld.x - torsoOrigin.x(),
-        jointWorld.y - torsoOrigin.y(),
-        jointWorld.z - torsoOrigin.z()
-    );
+    // // Pivot is the offset from physics body to Empty (joint)
+    // const pivotB = new AmmoLib.btVector3(
+    //     jointWorld.x - torsoOrigin.x(),
+    //     jointWorld.y - torsoOrigin.y(),
+    //     jointWorld.z - torsoOrigin.z()
+    // );
 
-    // Create hinge constraint
-    constraints.spinHinge = new AmmoLib.btHingeConstraint(
-        rigidBodies.anchor,
-        rigidBodies.torso,
-        new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin (already at joint)
-        pivotB,                             // pivotB: torso local pivot from Empty
-        new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
-        new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
-        true                                // useReferenceFrameA
-    );
+    // // Create hinge constraint
+    // constraints.spinHinge = new AmmoLib.btHingeConstraint(
+    //     rigidBodies.anchor,
+    //     rigidBodies.torso,
+    //     new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin (already at joint)
+    //     pivotB,                             // pivotB: torso local pivot from Empty
+    //     new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
+    //     new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
+    //     true                                // useReferenceFrameA
+    // );
 
-    // Enable angular motor
-    const targetSpeed = 0; // Start with no rotation
-    const maxTorque = 10;  // Reasonable torque limit
-    constraints.spinHinge.enableAngularMotor(true, targetSpeed, maxTorque);
+    // // Disable angular motor for debugging (remove spin)
+    // // const targetSpeed = 0; // Start with no rotation
+    // // const maxTorque = 10;  // Reasonable torque limit
+    // // constraints.spinHinge.enableAngularMotor(true, targetSpeed, maxTorque);
 
-    // Add constraint to physics world
-    physicsWorld.addConstraint(constraints.spinHinge, false);
+    // // Add constraint to physics world
+    // physicsWorld.addConstraint(constraints.spinHinge, false);
 
-    console.log('✅ Created hinge constraint with motor: spinHinge');
-    console.log(`   Target speed: ${targetSpeed}, Max torque: ${maxTorque}`);
+    console.log('⏭️ Skipping torso hinge constraint for pendulum debugging');
 
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
@@ -731,19 +747,19 @@ function createConstraints() {
             jointWorld.z - limbOrigin.z()
         );
 
-        // Create hinge constraint (Z-axis for side-to-side swing)
+        // Create hinge constraint (Z-axis for pendulum swing in XY plane)
         const hinge = new AmmoLib.btHingeConstraint(
             rigidBodies.torso,
             body,
             pivotA,
             pivotB,
-            new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis for side swing
+            new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis for XY plane swing
             new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
             true
         );
 
-        // Set angle limits (±60 degrees)
-        const maxAngle = Math.PI / 3;
+        // Set angle limits (±90 degrees for pendulum swing)
+        const maxAngle = Math.PI / 2;
         hinge.setLimit(-maxAngle, maxAngle);
 
         // Add to physics world (disable collisions between connected bodies)
@@ -782,6 +798,8 @@ let currentZoomDistance = 12; // Current distance from camera to target (matches
 
 // Animation timing
 let lastTime = 0;
+let frameCount = 0;
+let syncCount = 0;
 
 // Physics ↔ Three.js sync
 let physicsMeshMap = new Map();
@@ -802,35 +820,35 @@ function onMouseMove(event) {
 }
 
 function onMouseDown(event) {
-    // STEP 8: CLICK CONTROL - Set motor target speed on spinHinge
-    try {
-        if (!constraints.spinHinge) {
-            console.warn('⚠️ Motor not ready yet - constraints not created');
-            return;
-        }
+    // STEP 8: CLICK CONTROL - DISABLED for debugging pendulum physics
+    // try {
+    //     if (!constraints.spinHinge) {
+    //         console.warn('⚠️ Motor not ready yet - constraints not created');
+    //         return;
+    //     }
 
-        const direction = Math.random() > 0.5 ? 1 : -1; // Random spin direction
-        const targetSpeed = direction * MOTOR_TARGET_SPEED;
+    //     const direction = Math.random() > 0.5 ? 1 : -1; // Random spin direction
+    //     const targetSpeed = direction * MOTOR_TARGET_SPEED;
 
-        constraints.spinHinge.enableAngularMotor(true, targetSpeed, MOTOR_MAX_TORQUE);
-        console.log(`🔄 Motor activated: target speed ${targetSpeed}, max torque ${MOTOR_MAX_TORQUE}`);
-    } catch (error) {
-        console.error('❌ Motor control error:', error);
-    }
+    //     constraints.spinHinge.enableAngularMotor(true, targetSpeed, MOTOR_MAX_TORQUE);
+    //     console.log(`🔄 Motor activated: target speed ${targetSpeed}, max torque ${MOTOR_MAX_TORQUE}`);
+    // } catch (error) {
+    //     console.error('❌ Motor control error:', error);
+    // }
 }
 
 function onMouseUp(event) {
-    // Stop motor when mouse released
-    try {
-        if (!constraints.spinHinge) {
-            return; // Motor not ready yet
-        }
+    // Stop motor when mouse released - DISABLED for debugging
+    // try {
+    //     if (!constraints.spinHinge) {
+    //         return; // Motor not ready yet
+    //     }
 
-        constraints.spinHinge.enableAngularMotor(true, 0, MOTOR_MAX_TORQUE);
-        console.log('⏹️ Motor stopped');
-    } catch (error) {
-        console.error('❌ Motor stop error:', error);
-    }
+    //     constraints.spinHinge.enableAngularMotor(true, 0, MOTOR_MAX_TORQUE);
+    //     console.log('⏹️ Motor stopped');
+    // } catch (error) {
+    //     console.error('❌ Motor stop error:', error);
+    // }
 }
 
 function onMouseWheel(event) {
@@ -857,9 +875,19 @@ function animate(currentTime = 0) {
     try {
         requestAnimationFrame(animate);
 
+        // Initialize lastTime on first frame
+        if (lastTime === 0) {
+            lastTime = currentTime;
+        }
+
         // Calculate delta time for physics simulation
         const delta = Math.min((currentTime - lastTime) / 1000, 1/60); // Cap at 60 FPS for physics
         lastTime = currentTime;
+
+        // Debug: Log large delta values that might cause instability
+        if (delta > 0.1) {
+            console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
+        }
 
         // Guard: Only run physics if AmmoLib is loaded
         if (!AmmoLib) {
@@ -890,9 +918,51 @@ function animate(currentTime = 0) {
             rigidBodies.anchor.setActivationState(4); // DISABLE_DEACTIVATION
         }
 
+        // Move kinematic torso based on mouse position
+        if (rigidBodies.torso && jointEmptyRef) {
+            const jointWorldPos = new THREE.Vector3();
+            jointEmptyRef.getWorldPosition(jointWorldPos);
+
+            // Create rotation based on mouse tilt
+            const tiltX = currentAnchorX * 0.5; // Reduced tilt factor
+            const tiltZ = currentAnchorZ * 0.5;
+
+            const torsoTransform = new AmmoLib.btTransform();
+            torsoTransform.setIdentity();
+            torsoTransform.setOrigin(new AmmoLib.btVector3(
+                jointWorldPos.x,
+                jointWorldPos.y,
+                jointWorldPos.z
+            ));
+
+            // Apply rotation for tilting
+            const rotation = new AmmoLib.btQuaternion();
+            rotation.setEulerZYX(tiltZ, 0, tiltX); // ZYX order for tilt
+            torsoTransform.setRotation(rotation);
+
+            rigidBodies.torso.getMotionState().setWorldTransform(torsoTransform);
+            rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
+        }
+
         // Step physics simulation
         if (physicsWorld) {
-            physicsWorld.stepSimulation(delta, 10, 1/60); // Fixed time step for stability
+            // Debug: Log physics step
+            if (delta > 0.0167) { // More than 60 FPS
+                console.warn('⚠️ Physics step with large delta:', delta);
+            }
+
+            try {
+                physicsWorld.stepSimulation(delta, 10, 1/60); // Fixed time step for stability
+            } catch (e) {
+                console.error('❌ Physics step failed:', e);
+                return;
+            }
+
+            // Debug: Check if this is the first few frames
+            if (frameCount < 5) {
+                frameCount++;
+                console.log(`📊 Frame ${frameCount}: physics stepped with delta ${delta.toFixed(4)}`);
+            }
         }
 
         // STEP 9: SYNC PHYSICS → THREE
@@ -910,8 +980,8 @@ function animate(currentTime = 0) {
 
 // STEP 9: SYNC PHYSICS → THREE (MANDATORY)
 function syncPhysicsToThree() {
-    // Guard: Only sync if AmmoLib is loaded
-    if (!AmmoLib) {
+    // Guard: Only sync if AmmoLib is loaded and physics bodies exist
+    if (!AmmoLib || !rigidBodies.torso) {
         return;
     }
 
@@ -921,20 +991,31 @@ function syncPhysicsToThree() {
     if (rigidBodies.torso && bodyMainRef) {
         const motionState = rigidBodies.torso.getMotionState();
         if (motionState) {
-            motionState.getWorldTransform(tmpTrans);
+            try {
+                motionState.getWorldTransform(tmpTrans);
 
-            const p = tmpTrans.getOrigin();
-            const q = tmpTrans.getRotation();
+                const p = tmpTrans.getOrigin();
+                const q = tmpTrans.getRotation();
 
-            // Check if values are valid
-            if (isNaN(p.x()) || isNaN(p.y()) || isNaN(p.z())) {
-                console.warn('⚠️ Invalid physics position, skipping sync');
+                // Check if values are valid
+                if (isNaN(p.x()) || isNaN(p.y()) || isNaN(p.z()) || isNaN(q.x()) || isNaN(q.y()) || isNaN(q.z()) || isNaN(q.w())) {
+                    console.warn('⚠️ Invalid torso physics transform - pos:', p.x(), p.y(), p.z(), 'rot:', q.x(), q.y(), q.z(), q.w(), 'skipping sync');
+                    return;
+                }
+
+                // Debug: Log first few successful syncs
+                if (syncCount < 3) {
+                    syncCount++;
+                    console.log(`🔄 Torso sync ${syncCount}: pos (${p.x().toFixed(3)}, ${p.y().toFixed(3)}, ${p.z().toFixed(3)})`);
+                }
+
+                // Sync to the group - groups handle hierarchical transforms correctly
+                bodyMainRef.position.set(p.x(), p.y(), p.z());
+                bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
+            } catch (e) {
+                console.error('❌ Error getting torso transform:', e);
                 return;
             }
-
-            // Sync to the group - groups handle hierarchical transforms correctly
-            bodyMainRef.position.set(p.x(), p.y(), p.z());
-            bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
         } else {
             console.warn('⚠️ Torso motion state is null');
         }
@@ -952,13 +1033,23 @@ function syncPhysicsToThree() {
         if (body && ref) {
             const motionState = body.getMotionState();
             if (motionState) {
-                motionState.getWorldTransform(tmpTrans);
+                try {
+                    motionState.getWorldTransform(tmpTrans);
 
-                const p = tmpTrans.getOrigin();
-                const q = tmpTrans.getRotation();
+                    const p = tmpTrans.getOrigin();
+                    const q = tmpTrans.getRotation();
 
-                ref.position.set(p.x(), p.y(), p.z());
-                ref.quaternion.set(q.x(), q.y(), q.z(), q.w());
+                    // Check if values are valid
+                    if (isNaN(p.x()) || isNaN(p.y()) || isNaN(p.z()) || isNaN(q.x()) || isNaN(q.y()) || isNaN(q.z()) || isNaN(q.w())) {
+                        console.warn(`⚠️ Invalid ${name} physics transform - pos:`, p.x(), p.y(), p.z(), 'rot:', q.x(), q.y(), q.z(), q.w());
+                        return;
+                    }
+
+                    ref.position.set(p.x(), p.y(), p.z());
+                    ref.quaternion.set(q.x(), q.y(), q.z(), q.w());
+                } catch (e) {
+                    console.error(`❌ Error getting ${name} transform:`, e);
+                }
             }
         }
     });
