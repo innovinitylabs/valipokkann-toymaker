@@ -932,34 +932,35 @@ function animate(currentTime = 0) {
             console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
         }
 
-        // MANUAL HINGE CONTROL - Direct arm rotation in torso's local XY plane
+        // MANUAL HINGE CONTROL - Arms positioned by translation, not rotation
         if (bodyMainRef) {
             // Smooth interpolation to target position
             currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 2;
             currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 2;
 
-            // Convert mouse position to hinge angles (in radians)
-            const maxArmAngle = Math.PI / 2; // 90 degrees max arm swing
-            const maxLegAngle = Math.PI / 4; // 45 degrees max leg swing
+            // Convert mouse position to hinge positions (in world units)
+            const maxArmReach = 2.0; // Maximum arm extension
+            const maxLegSwing = 1.0; // Maximum leg swing distance
 
-            // Arms swing in torso's local XY plane (around X-axis for up-down swing)
-            const leftArmAngle = currentAnchorX * maxArmAngle;   // X mouse controls left arm
-            const rightArmAngle = currentAnchorX * maxArmAngle;  // X mouse controls right arm (same direction for jumping jack)
-            const armVerticalAngle = currentAnchorZ * maxArmAngle; // Y mouse controls vertical swing
+            // Calculate arm positions relative to torso
+            const armXOffset = currentAnchorX * maxArmReach; // Left-right movement
+            const armZOffset = currentAnchorZ * maxArmReach; // Forward-back movement
 
-            // Legs swing in world space for now
-            const legSwingAngle = currentAnchorZ * maxLegAngle;
+            // Legs swing in world space
+            const legSwingAngle = currentAnchorZ * Math.PI / 6; // 30 degrees max
 
-            // Apply local hinge rotation to arms (around X-axis for horizontal swing in XY plane)
+            // Position arms by translation (no local rotation)
             if (leftArmRef) {
-                leftArmRef.rotation.x = leftArmAngle;
-                leftArmRef.rotation.y = 0; // Reset other axes
-                leftArmRef.rotation.z = 0;
+                // Reset any rotation
+                leftArmRef.rotation.set(0, 0, 0);
+                // Position relative to torso's local space
+                leftArmRef.position.set(-armXOffset, 0, armZOffset);
             }
             if (rightArmRef) {
-                rightArmRef.rotation.x = rightArmAngle;
-                rightArmRef.rotation.y = 0; // Reset other axes
-                rightArmRef.rotation.z = 0;
+                // Reset any rotation
+                rightArmRef.rotation.set(0, 0, 0);
+                // Position relative to torso's local space
+                rightArmRef.position.set(armXOffset, 0, -armZOffset);
             }
 
             // Apply world hinge rotation to legs (around Y-axis)
