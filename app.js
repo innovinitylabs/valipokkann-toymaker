@@ -1027,24 +1027,30 @@ function animate(currentTime = 0) {
             console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
         }
 
-        // PURE PHYSICS CONTROL - Focus on limb hinges, disable torso spin
+        // PHYSICS CONTROL - Mouse moves torso to test hinge constraints
         if (AmmoLib && physicsWorld) {
-            // DISABLED: Torso spin motor - focus on limb physics
-            /*
-            // Update hinge motors based on mouse input
-            if (constraints.spinHinge) {
+            // Apply mouse forces to torso for testing hinge physics
+            if (rigidBodies.torso) {
                 // Smooth interpolation to target position
-                currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 2;
-                currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 2;
+                currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 1.5;
+                currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 1.5;
 
-                // Convert mouse to motor target angle
-                const maxAngle = Math.PI / 3; // 60 degrees max
-                const targetAngle = currentAnchorX * maxAngle;
+                // Apply gentle forces to torso based on mouse position
+                const forceScale = 8.0; // Moderate force for visible movement
+                const forceX = currentAnchorX * forceScale;
+                const forceZ = currentAnchorZ * forceScale;
 
-                // Enable motor with target velocity
-                constraints.spinHinge.enableAngularMotor(true, targetAngle * 2, 10);
+                // Apply force to torso (at its center)
+                rigidBodies.torso.applyCentralForce(
+                    new AmmoLib.btVector3(forceX, 0, forceZ)
+                );
+
+                // Clear velocities occasionally to prevent runaway motion
+                if (Math.random() < 0.01) { // 1% chance each frame
+                    rigidBodies.torso.setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+                    rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+                }
             }
-            */
 
             // Step real physics simulation
             try {
