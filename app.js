@@ -754,10 +754,6 @@ function createRigidBodies() {
         leftLeg: !!rigidBodies.leftLeg,
         rightLeg: !!rigidBodies.rightLeg
     });
-
-    // Count total rigid bodies in physics world
-    const numBodies = physicsWorld.getNumCollisionObjects();
-    console.log(`🔢 Total rigid bodies in physics world: ${numBodies}`);
 }
 
 // Create hinge constraint with motor between anchor and torso
@@ -825,10 +821,6 @@ function createConstraints() {
     physicsWorld.addConstraint(constraints.spinHinge, true);
 
     console.log('✅ Created anchor ↔ torso hinge constraint');
-
-    // DEBUG: Check total constraints
-    const numConstraints = physicsWorld.getNumConstraints();
-    console.log(`🔗 Constraints after torso hinge: ${numConstraints}`);
 
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
@@ -919,9 +911,7 @@ function createConstraints() {
         console.log(`   Pivot A (torso local): (${pivotA.x().toFixed(3)}, ${pivotA.y().toFixed(3)}, ${pivotA.z().toFixed(3)})`);
         console.log(`   Pivot B (limb local): (${pivotB.x().toFixed(3)}, ${pivotB.y().toFixed(3)}, ${pivotB.z().toFixed(3)})`);
 
-        // DEBUG: Verify constraint was added
-        const numConstraints = physicsWorld.getNumConstraints();
-        console.log(`🔗 Total constraints in physics world: ${numConstraints}`);
+        // Constraint added successfully
     });
 }
 
@@ -1064,10 +1054,10 @@ function animate(currentTime = 0) {
                 return;
             }
 
-            // DEBUG: Check constraint status on first few frames
+            // DEBUG: Check limb positions on first few frames
             if (frameCount < 5) {
                 frameCount++;
-                console.log(`📊 Frame ${frameCount}: physics stepped, ${physicsWorld.getNumConstraints()} constraints active`);
+                console.log(`📊 Frame ${frameCount}: physics stepped`);
 
                 // Check if limbs are staying attached
                 const limbs = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
