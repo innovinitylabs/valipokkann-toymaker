@@ -1029,24 +1029,28 @@ function animate(currentTime = 0) {
             // Legs swing in world space for now
             const legSwingAngle = currentAnchorZ * maxLegAngle;
 
-            // Apply hinge rotation to pivot objects (limbs swing around constraint points)
+            // Apply hinge rotation to pivot objects (limbs swing around Z-axis/blue axis)
             if (leftArmPivot) {
-                leftArmPivot.rotation.x = leftArmAngle;
-                leftArmPivot.rotation.y = 0; // Reset other axes
-                leftArmPivot.rotation.z = 0;
+                leftArmPivot.rotation.x = 0; // Reset other axes
+                leftArmPivot.rotation.y = 0;
+                leftArmPivot.rotation.z = leftArmAngle; // Z-axis hinge
             }
             if (rightArmPivot) {
-                rightArmPivot.rotation.x = rightArmAngle;
-                rightArmPivot.rotation.y = 0; // Reset other axes
-                rightArmPivot.rotation.z = 0;
+                rightArmPivot.rotation.x = 0; // Reset other axes
+                rightArmPivot.rotation.y = 0;
+                rightArmPivot.rotation.z = rightArmAngle; // Z-axis hinge
             }
 
-            // Apply world hinge rotation to legs (around Y-axis)
+            // Apply hinge rotation to legs (around Z-axis/blue axis)
             if (leftLegRef) {
-                leftLegRef.rotation.y = legSwingAngle;
+                leftLegRef.rotation.x = 0;
+                leftLegRef.rotation.y = 0;
+                leftLegRef.rotation.z = legSwingAngle; // Z-axis hinge
             }
             if (rightLegRef) {
-                rightLegRef.rotation.y = -legSwingAngle; // Opposite direction
+                rightLegRef.rotation.x = 0;
+                rightLegRef.rotation.y = 0;
+                rightLegRef.rotation.z = -legSwingAngle; // Opposite direction, Z-axis hinge
             }
         }
 
