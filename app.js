@@ -111,6 +111,14 @@ loader.load(
         // Find toy parts in the hierarchy - this will need to be adjusted based on actual GLTF structure
         findToyParts(toyGroupRef);
 
+        // STEP 1: DETACH LIMBS FROM GLTF HIERARCHY
+        // Limbs must be world objects so physics can drive them without parent interference
+        if (leftArmRef) scene.attach(leftArmRef);
+        if (rightArmRef) scene.attach(rightArmRef);
+        if (leftLegRef) scene.attach(leftLegRef);
+        if (rightLegRef) scene.attach(rightLegRef);
+
+        console.log('✅ Detached limbs from GLTF hierarchy for physics control');
 
         // Set up physics bodies and constraints
         setupPhysicsBodies();
@@ -442,45 +450,7 @@ function setupPhysicsBodies() {
             console.log('✅ Created right leg hinge constraint with mechanical pivots');
         }
 
-        // STEP 2: ADD POSITIONAL LOCKS AT EACH JOINT (PREVENTS DRIFT)
-        console.log('🔒 Adding positional locks for rigid mechanical joints...');
-
-        // Lock constraints prevent positional drift while hinges allow rotation
-        if (leftArmBody) {
-            const leftArmLock = new CANNON.LockConstraint(bodyBody, leftArmBody, {
-                maxForce: 1e6  // Strong positional lock
-            });
-            leftArmLock.collideConnected = false; // Prevent self-collision
-            world.addConstraint(leftArmLock);
-            console.log('✅ Added left arm positional lock');
-        }
-
-        if (rightArmBody) {
-            const rightArmLock = new CANNON.LockConstraint(bodyBody, rightArmBody, {
-                maxForce: 1e6  // Strong positional lock
-            });
-            rightArmLock.collideConnected = false; // Prevent self-collision
-            world.addConstraint(rightArmLock);
-            console.log('✅ Added right arm positional lock');
-        }
-
-        if (leftLegBody) {
-            const leftLegLock = new CANNON.LockConstraint(bodyBody, leftLegBody, {
-                maxForce: 1e6  // Strong positional lock
-            });
-            leftLegLock.collideConnected = false; // Prevent self-collision
-            world.addConstraint(leftLegLock);
-            console.log('✅ Added left leg positional lock');
-        }
-
-        if (rightLegBody) {
-            const rightLegLock = new CANNON.LockConstraint(bodyBody, rightLegBody, {
-                maxForce: 1e6  // Strong positional lock
-            });
-            rightLegLock.collideConnected = false; // Prevent self-collision
-            world.addConstraint(rightLegLock);
-            console.log('✅ Added right leg positional lock');
-        }
+        // Hinges alone are now sufficient with proper hierarchy
 
         console.log('✅ Physics setup complete - jumping jack with mechanical linkages');
         console.log('🎮 Physics jumping jack ready - move mouse to tilt, click to spin!');
