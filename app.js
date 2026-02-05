@@ -77,6 +77,7 @@ let leftLegRef, rightLegRef; // Leg objects for jumping jack motion
 // Physics bodies and constraints
 let bodyBody, leftArmBody, rightArmBody, leftLegBody, rightLegBody;
 let leftArmConstraint, rightArmConstraint, leftLegConstraint, rightLegConstraint;
+let physicsWarmupFrames;
 
 // Load the GLTF model
 loader.load(
@@ -292,7 +293,7 @@ function setupPhysicsBodies() {
 
         // STEP 3: CONNECT STICK → TORSO
         const stickTorsoLock = new CANNON.LockConstraint(stickBody, torsoBody);
-        stickTorsoLock.collideConnected = false;
+        stickTorsoLock.collideConnected = true; // TEMPORARILY ENABLE collision
         world.addConstraint(stickTorsoLock);
         console.log('✅ Connected stick driver to torso body');
 
@@ -380,11 +381,12 @@ function setupPhysicsBodies() {
             const jointWorld = new THREE.Vector3();
             leftArmRef.getWorldPosition(jointWorld);
 
-            // Convert to body-local coordinates (pivotA)
+            // Convert to TORSO BODY LOCAL coordinates (pivotA)
+            const torsoWorldPos = torsoBody.position;
             const pivotA = new CANNON.Vec3(
-                jointWorld.x - bodyWorldPos.x,
-                jointWorld.y - bodyWorldPos.y,
-                jointWorld.z - bodyWorldPos.z
+                jointWorld.x - torsoWorldPos.x,
+                jointWorld.y - torsoWorldPos.y,
+                jointWorld.z - torsoWorldPos.z
             );
 
             // Limb local pivot is its origin (pivotB)
@@ -397,7 +399,8 @@ function setupPhysicsBodies() {
                 axisB: new CANNON.Vec3(1, 0, 0)
             });
             leftArmConstraint.collideConnected = true; // ENABLE collision with torso
-            leftArmConstraint.setLimits(-Math.PI / 2, Math.PI / 2); // Prevent rotation into torso
+            // Note: Cannon.js HingeConstraint angular limits not available via setLimits
+            // Collision shapes prevent rotation into torso instead
             world.addConstraint(leftArmConstraint);
             console.log('✅ Created left arm hinge constraint with collision enabled');
         }
@@ -407,11 +410,12 @@ function setupPhysicsBodies() {
             const jointWorld = new THREE.Vector3();
             rightArmRef.getWorldPosition(jointWorld);
 
-            // Convert to body-local coordinates (pivotA)
+            // Convert to TORSO BODY LOCAL coordinates (pivotA)
+            const torsoWorldPos = torsoBody.position;
             const pivotA = new CANNON.Vec3(
-                jointWorld.x - bodyWorldPos.x,
-                jointWorld.y - bodyWorldPos.y,
-                jointWorld.z - bodyWorldPos.z
+                jointWorld.x - torsoWorldPos.x,
+                jointWorld.y - torsoWorldPos.y,
+                jointWorld.z - torsoWorldPos.z
             );
 
             // Limb local pivot is its origin (pivotB)
@@ -424,7 +428,8 @@ function setupPhysicsBodies() {
                 axisB: new CANNON.Vec3(1, 0, 0)
             });
             rightArmConstraint.collideConnected = true; // ENABLE collision with torso
-            rightArmConstraint.setLimits(-Math.PI / 2, Math.PI / 2); // Prevent rotation into torso
+            // Note: Cannon.js HingeConstraint angular limits not available via setLimits
+            // Collision shapes prevent rotation into torso instead
             world.addConstraint(rightArmConstraint);
             console.log('✅ Created right arm hinge constraint with collision enabled');
         }
@@ -435,11 +440,12 @@ function setupPhysicsBodies() {
             const jointWorld = new THREE.Vector3();
             leftLegRef.getWorldPosition(jointWorld);
 
-            // Convert to body-local coordinates (pivotA)
+            // Convert to TORSO BODY LOCAL coordinates (pivotA)
+            const torsoWorldPos = torsoBody.position;
             const pivotA = new CANNON.Vec3(
-                jointWorld.x - bodyWorldPos.x,
-                jointWorld.y - bodyWorldPos.y,
-                jointWorld.z - bodyWorldPos.z
+                jointWorld.x - torsoWorldPos.x,
+                jointWorld.y - torsoWorldPos.y,
+                jointWorld.z - torsoWorldPos.z
             );
 
             // Limb local pivot is its origin (pivotB)
@@ -461,11 +467,12 @@ function setupPhysicsBodies() {
             const jointWorld = new THREE.Vector3();
             rightLegRef.getWorldPosition(jointWorld);
 
-            // Convert to body-local coordinates (pivotA)
+            // Convert to TORSO BODY LOCAL coordinates (pivotA)
+            const torsoWorldPos = torsoBody.position;
             const pivotA = new CANNON.Vec3(
-                jointWorld.x - bodyWorldPos.x,
-                jointWorld.y - bodyWorldPos.y,
-                jointWorld.z - bodyWorldPos.z
+                jointWorld.x - torsoWorldPos.x,
+                jointWorld.y - torsoWorldPos.y,
+                jointWorld.z - torsoWorldPos.z
             );
 
             // Limb local pivot is its origin (pivotB)
@@ -483,6 +490,9 @@ function setupPhysicsBodies() {
         }
 
         // Hinges alone are now sufficient with proper hierarchy
+
+        // FIX 2: FREEZE PHYSICS FOR 1 FRAME AFTER SETUP
+        physicsWarmupFrames = 2;
 
         console.log('✅ Physics setup complete - jumping jack with mechanical linkages');
         console.log('🎮 Physics jumping jack ready - move mouse to tilt, click to spin!');
@@ -643,7 +653,13 @@ function animate() {
 
         // Update physics simulation - kinematic driver controls dynamic limbs
         if (world && bodyBody) {
-            world.step(1/60); // 60 FPS physics
+            // FIX 2: FREEZE PHYSICS FOR WARMUP FRAMES
+            if (physicsWarmupFrames > 0) {
+                physicsWarmupFrames--;
+                world.step(1/60, 0, 0); // no forces, no catch-up - let constraints settle
+            } else {
+                world.step(1/60); // 60 FPS physics
+            }
 
             // SYNC RULE: Each animation frame copy Cannon body position + quaternion → matching Three.js object
             // Do NOT modify Three.js transforms directly - physics bodies drive everything
