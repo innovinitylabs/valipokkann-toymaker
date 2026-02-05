@@ -1036,7 +1036,7 @@ function animate(currentTime = 0) {
                 currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 1.5;
 
                 // Apply torques to tilt torso based on mouse position
-                const torqueScale = 3.0; // Moderate torque for tilting
+                const torqueScale = 15.0; // Stronger torque for visible tilting
                 const torqueX = currentAnchorX * torqueScale; // Tilt around X-axis
                 const torqueZ = currentAnchorZ * torqueScale; // Tilt around Z-axis
 
@@ -1045,24 +1045,48 @@ function animate(currentTime = 0) {
                     new AmmoLib.btVector3(torqueX, 0, torqueZ)
                 );
 
-                // Clear angular velocities occasionally to allow controlled tilting
-                if (Math.random() < 0.02) { // 2% chance each frame
-                    rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+                // DEBUG: Log torque application
+                if (Math.abs(torqueX) > 1 || Math.abs(torqueZ) > 1) {
+                    console.log(`🔄 Applying torque: X=${torqueX.toFixed(2)}, Z=${torqueZ.toFixed(2)}`);
                 }
+
+                // Set moderate damping for controlled motion (not too much)
+                rigidBodies.torso.setDamping(0.1, 0.3); // Linear, angular damping
+
+                // TEMPORARILY DISABLE velocity clearing to test if motion works
+                /*
+                // Clear angular velocities occasionally to prevent runaway
+                if (Math.random() < 0.05) { // 5% chance each frame
+                    rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+                    console.log('🔄 Cleared angular velocity');
+                }
+                */
             }
 
             // Step real physics simulation
             try {
                 physicsWorld.stepSimulation(delta, 10);
+                if (frameCount < 3) {
+                    console.log(`⚙️ Physics stepped with delta: ${delta.toFixed(4)}`);
+                }
             } catch (e) {
                 console.error('❌ Physics step failed:', e);
                 return;
             }
 
-            // DEBUG: Check limb positions on first few frames
+            // DEBUG: Check torso movement and limb positions
             if (frameCount < 5) {
                 frameCount++;
-                console.log(`📊 Frame ${frameCount}: physics stepped`);
+                console.log(`📊 Frame ${frameCount}: physics simulation active`);
+
+                // Check torso position/rotation
+                if (rigidBodies.torso) {
+                    const transform = new AmmoLib.btTransform();
+                    rigidBodies.torso.getMotionState().getWorldTransform(transform);
+                    const pos = transform.getOrigin();
+                    const rot = transform.getRotation();
+                    console.log(`   Torso: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)}) rot(${rot.x().toFixed(2)}, ${rot.y().toFixed(2)}, ${rot.z().toFixed(2)}, ${rot.w().toFixed(2)})`);
+                }
 
                 // Check if limbs are staying attached
                 const limbs = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
