@@ -183,9 +183,20 @@ function findToyParts(object) {
             console.log('✅ FOUND: right_leg → rightLegRef (ACTUAL MESH GROUP)');
             console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
 
-        } else if (originalName === 'Constraint_left_hand' || originalName === 'Constraint_right_hand' ||
-                   originalName === 'Constraint_left_leg' || originalName === 'Constraint_right_leg') {
-            console.log(`⚠️  FOUND CONSTRAINT OBJECT: "${originalName}" - ignoring for physics`);
+        } else if (originalName === 'Constraint_left_hand') {
+            console.log(`📍 FOUND CONSTRAINT MARKER: "${originalName}"`);
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
+
+        } else if (originalName === 'Constraint_right_hand') {
+            console.log(`📍 FOUND CONSTRAINT MARKER: "${originalName}"`);
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
+
+        } else if (originalName === 'Constraint_left_leg') {
+            console.log(`📍 FOUND CONSTRAINT MARKER: "${originalName}"`);
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
+
+        } else if (originalName === 'Constraint_right_leg') {
+            console.log(`📍 FOUND CONSTRAINT MARKER: "${originalName}"`);
             console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
 
         } else {
@@ -302,7 +313,7 @@ function setupPhysicsBodies() {
         // STEP 2: CREATE LIMB BODIES AT CONSTRAINT MARKER POSITIONS
         // Use existing bodyWorldPos from kinematic body setup
 
-        // Create dynamic bodies for arms at constraint marker positions
+        // Create dynamic bodies for arms at VISUAL MESH positions (not constraint markers)
         const limbWorldPos = new THREE.Vector3();
         const limbWorldQuat = new THREE.Quaternion();
 
@@ -310,7 +321,7 @@ function setupPhysicsBodies() {
             leftArmRef.getWorldPosition(limbWorldPos);
             leftArmRef.getWorldQuaternion(limbWorldQuat);
 
-            leftArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
+            leftArmBody = new CANNON.Body({ mass: 2.0 }); // Heavier mass for stability
             leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
             leftArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             leftArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
@@ -319,14 +330,14 @@ function setupPhysicsBodies() {
             leftArmBody.angularDamping = 0.4;
 
             world.addBody(leftArmBody);
-            console.log('✅ Created left arm body at constraint marker position');
+            console.log('✅ Created left arm body at visual mesh position');
         }
 
         if (rightArmRef) {
             rightArmRef.getWorldPosition(limbWorldPos);
             rightArmRef.getWorldQuaternion(limbWorldQuat);
 
-            rightArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
+            rightArmBody = new CANNON.Body({ mass: 2.0 }); // Heavier mass for stability
             rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
             rightArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             rightArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
@@ -343,7 +354,7 @@ function setupPhysicsBodies() {
             leftLegRef.getWorldPosition(limbWorldPos);
             leftLegRef.getWorldQuaternion(limbWorldQuat);
 
-            leftLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
+            leftLegBody = new CANNON.Body({ mass: 3.0 }); // Heavier mass for stability
             leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
             leftLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             leftLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
@@ -359,7 +370,7 @@ function setupPhysicsBodies() {
             rightLegRef.getWorldPosition(limbWorldPos);
             rightLegRef.getWorldQuaternion(limbWorldQuat);
 
-            rightLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
+            rightLegBody = new CANNON.Body({ mass: 3.0 }); // Heavier mass for stability
             rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
             rightLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             rightLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
@@ -376,7 +387,7 @@ function setupPhysicsBodies() {
 
         // Arms: hinge around X-axis for forward/backward swing
         if (leftArmBody) {
-            // Use the constraint marker as the hinge location
+            // Use visual mesh position as joint location (assume mesh center = joint)
             const jointWorld = new THREE.Vector3();
             leftArmRef.getWorldPosition(jointWorld);
 
@@ -387,7 +398,7 @@ function setupPhysicsBodies() {
                 jointWorld.z - bodyWorldPos.z
             );
 
-            // Limb local pivot is its origin (pivotB)
+            // Limb local pivot (pivotB) - joint is at body center
             const pivotB = new CANNON.Vec3(0, 0, 0);
 
             leftArmConstraint = new CANNON.HingeConstraint(torsoBody, leftArmBody, {
@@ -396,7 +407,7 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
                 axisB: new CANNON.Vec3(1, 0, 0)
             });
-            leftArmConstraint.collideConnected = true; // ENABLE collision between torso and arm
+            leftArmConstraint.collideConnected = false; // Temporarily disable for testing
             leftArmConstraint.setLimits(-Math.PI / 2, Math.PI / 2); // Mechanical limits
             world.addConstraint(leftArmConstraint);
             console.log('✅ Created left arm hinge constraint with collision and limits');
@@ -423,7 +434,7 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
                 axisB: new CANNON.Vec3(1, 0, 0)
             });
-            rightArmConstraint.collideConnected = true; // ENABLE collision between torso and arm
+            rightArmConstraint.collideConnected = false; // Temporarily disable for testing
             rightArmConstraint.setLimits(-Math.PI / 2, Math.PI / 2); // Mechanical limits
             world.addConstraint(rightArmConstraint);
             console.log('✅ Created right arm hinge constraint with collision and limits');
@@ -451,7 +462,7 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
                 axisB: new CANNON.Vec3(0, 0, 1)
             });
-            leftLegConstraint.collideConnected = true; // ENABLE collision between torso and leg
+            leftLegConstraint.collideConnected = false; // Temporarily disable for testing
             leftLegConstraint.setLimits(-Math.PI / 3, Math.PI / 3); // Tighter mechanical limits for legs
             world.addConstraint(leftLegConstraint);
             console.log('✅ Created left leg hinge constraint with collision and limits');
@@ -478,7 +489,7 @@ function setupPhysicsBodies() {
                 axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
                 axisB: new CANNON.Vec3(0, 0, 1)
             });
-            rightLegConstraint.collideConnected = true; // ENABLE collision between torso and leg
+            rightLegConstraint.collideConnected = false; // Temporarily disable for testing
             rightLegConstraint.setLimits(-Math.PI / 3, Math.PI / 3); // Tighter mechanical limits for legs
             world.addConstraint(rightLegConstraint);
             console.log('✅ Created right leg hinge constraint with collision and limits');
@@ -518,8 +529,8 @@ world.defaultContactMaterial.friction = 0.4;
 world.defaultContactMaterial.restitution = 0.3;
 
 // Strengthen solver for rigid mechanical joints
-world.solver.iterations = 40;
-world.solver.tolerance = 0.001;
+world.solver.iterations = 60;
+world.solver.tolerance = 0.0001;
 
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
