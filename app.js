@@ -732,13 +732,10 @@ function createRigidBodies() {
 
         rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
 
-        // TEMPORARY: Make kinematic so they follow mesh during manual control
-        rigidBodies[name].setCollisionFlags(
-            rigidBodies[name].getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
-        );
-
-        rigidBodies[name].setDamping(0.1, 0.2);
-        rigidBodies[name].setActivationState(4);
+        // Make dynamic with high damping and disable gravity
+        rigidBodies[name].setDamping(0.8, 0.8); // High linear and angular damping
+        rigidBodies[name].setGravity(new AmmoLib.btVector3(0, 0, 0)); // Disable gravity for limbs
+        rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies[name].setSleepingThresholds(0, 0);
 
         physicsWorld.addRigidBody(rigidBodies[name]);
@@ -1060,8 +1057,26 @@ function animate(currentTime = 0) {
                 rightLegRef.rotation.z = -legSwingAngle; // Opposite direction, Z-axis hinge
             }
 
-            // Sync kinematic rigid bodies with mesh positions
-            syncKinematicRigidBodies();
+            // LIMITED PHYSICS - Allow collision detection between dynamic bodies
+            if (AmmoLib && physicsWorld) {
+                // Clear velocities before physics step to reduce unwanted movement
+                ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                    if (rigidBodies[name]) {
+                        rigidBodies[name].setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+                        rigidBodies[name].setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+                    }
+                });
+
+                // Step physics with very small time step for collision detection
+                try {
+                    physicsWorld.stepSimulation(delta * 0.01, 1, 1/120); // Minimal simulation
+                } catch (e) {
+                    console.error('❌ Limited physics step failed:', e);
+                }
+            }
+
+            // Sync dynamic rigid bodies with mesh positions
+            syncDynamicRigidBodies();
         }
 
         // COMMENTED OUT PHYSICS SYNC
@@ -1077,14 +1092,13 @@ function animate(currentTime = 0) {
     }
 }
 
-// Sync kinematic rigid bodies with mesh positions during manual control
-function syncKinematicRigidBodies() {
+// Sync dynamic rigid bodies with mesh positions during manual control
+function syncDynamicRigidBodies() {
     if (!AmmoLib) return;
 
     const tmpTrans = new AmmoLib.btTransform();
 
-    // Sync limbs from Three.js meshes to kinematic rigid bodies
-    // Note: Torso is dynamic, not kinematic
+    // Sync limbs from Three.js meshes to dynamic rigid bodies
     const limbs = [
         { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm },
         { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm },
@@ -1093,7 +1107,7 @@ function syncKinematicRigidBodies() {
     ];
 
     limbs.forEach(({ name, ref, body }) => {
-        if (body && ref && (body.getCollisionFlags() & 2)) { // Check if kinematic
+        if (body && ref) {
             try {
                 // Get world position and rotation from Three.js mesh
                 const worldPos = new THREE.Vector3();
@@ -1101,7 +1115,12 @@ function syncKinematicRigidBodies() {
                 ref.getWorldPosition(worldPos);
                 ref.getWorldQuaternion(worldQuat);
 
-                // Update kinematic rigid body transform
+                // For dynamic bodies, we need to set position and rotation
+                // Clear velocities first to prevent unwanted movement
+                body.setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+                body.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+
+                // Set the transform directly (works for dynamic bodies when not simulating)
                 tmpTrans.setIdentity();
                 tmpTrans.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
                 tmpTrans.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
@@ -1109,7 +1128,7 @@ function syncKinematicRigidBodies() {
                 body.getMotionState().setWorldTransform(tmpTrans);
                 body.setActivationState(4); // DISABLE_DEACTIVATION
             } catch (e) {
-                console.error(`❌ Error syncing ${name} kinematic body:`, e);
+                console.error(`❌ Error syncing ${name} dynamic body:`, e);
             }
         }
     });
