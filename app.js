@@ -78,6 +78,7 @@ let constraints = {};
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy
 let bodyMainRef;
+let jointEmptyRef; // Blender Empty marking the stick-to-torso joint
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
 function initializeAmmo() {
@@ -252,6 +253,17 @@ function findToyParts(object) {
             console.log(`   "${child.name}" (${child.type})`);
         });
     }
+
+    // STEP 1: IDENTIFY THE JOINT EMPTY
+    jointEmptyRef = findCollectionInGLTF(object, 'Empty001') 
+                 || findCollectionInGLTF(object, 'Empty002');
+
+    if (!jointEmptyRef) {
+        console.error('❌ Joint Empty not found — check Blender file');
+    } else {
+        console.log('✅ Joint Empty found:', jointEmptyRef.name);
+        console.log('📍 Joint Empty position:', jointEmptyRef.position);
+    }
 }
 
 // Initialize Ammo.js physics world and create rigid bodies
@@ -275,17 +287,31 @@ function createRigidBodies() {
         return;
     }
 
+    if (!jointEmptyRef) {
+        console.error('❌ Cannot create rigid bodies - joint Empty not found');
+        return;
+    }
+
     console.log('✅ bodyMainRef confirmed, proceeding with physics creation...');
 
-    // STEP 3: CREATE STATIC ANCHOR BODY (follows cursor)
+    // STEP 2: CREATE STATIC ANCHOR BODY (follows cursor) - ALIGNED TO JOINT EMPTY
     {
         // Use btSphereShape for simple anchor
         const anchorShape = new AmmoLib.btSphereShape(0.1); // Small sphere
 
-        // Start at origin
+        // STEP 2: ALIGN ANCHOR TO JOINT EMPTY
+        const jointWorldPos = new THREE.Vector3();
+        jointEmptyRef.getWorldPosition(jointWorldPos);
+
         const anchorTransform = new AmmoLib.btTransform();
         anchorTransform.setIdentity();
-        anchorTransform.setOrigin(new AmmoLib.btVector3(0, 0, 0));
+        anchorTransform.setOrigin(
+            new AmmoLib.btVector3(
+                jointWorldPos.x,
+                jointWorldPos.y,
+                jointWorldPos.z
+            )
+        );
 
         const anchorMotionState = new AmmoLib.btDefaultMotionState(anchorTransform);
 
@@ -378,30 +404,46 @@ function createConstraints() {
         return;
     }
 
+    if (!jointEmptyRef) {
+        console.error('❌ Cannot create constraints - joint Empty not found');
+        return;
+    }
+
+    if (!bodyMainRef) {
+        console.error('❌ Cannot create constraints - bodyMainRef not found');
+        return;
+    }
+
     // STEP 5: ANCHOR ↔ TORSO HINGE WITH MOTOR
-    // pivotA = anchor origin (0, 0, 0)
-    // pivotB = bottom of torso
+    // pivotA = anchor origin (0, 0, 0) - anchor is already aligned to joint Empty
+    // pivotB = torso local pivot computed from Empty world position
     // axis = vertical (Y)
 
-    // Get torso bottom position (local to torso)
-    const torsoTransform = new AmmoLib.btTransform();
-    rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
-    const torsoOrigin = torsoTransform.getOrigin();
+    // STEP 4: COMPUTE TORSO LOCAL PIVOT FROM EMPTY
+    // World position of joint
+    const jointWorld = new THREE.Vector3();
+    jointEmptyRef.getWorldPosition(jointWorld);
 
-    // Calculate pivot on torso (bottom center, local coordinates)
-    const bbox = new THREE.Box3().setFromObject(bodyMainRef);
-    const size = bbox.getSize(new THREE.Vector3());
-    const pivotB = new AmmoLib.btVector3(0, -size.y * 0.5, 0); // Bottom of torso box
+    // World transform of torso
+    const torsoWorldPos = new THREE.Vector3();
+    bodyMainRef.getWorldPosition(torsoWorldPos);
+
+    // Convert world joint → torso local space
+    const pivotB = new AmmoLib.btVector3(
+        jointWorld.x - torsoWorldPos.x,
+        jointWorld.y - torsoWorldPos.y,
+        jointWorld.z - torsoWorldPos.z
+    );
 
     // Create hinge constraint
     constraints.spinHinge = new AmmoLib.btHingeConstraint(
         rigidBodies.anchor,
         rigidBodies.torso,
-        new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin
-        pivotB,                          // pivotB: bottom of torso
+        new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin (already at joint)
+        pivotB,                             // pivotB: torso local pivot from Empty
         new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
         new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
-        true                            // useReferenceFrameA
+        true                                // useReferenceFrameA
     );
 
     // Enable angular motor
@@ -523,15 +565,23 @@ function animate(currentTime = 0) {
         }
 
         // STEP 7: CURSOR CONTROL - Update anchor body transform every frame
-        if (rigidBodies.anchor) {
+        if (rigidBodies.anchor && jointEmptyRef) {
             // Smooth interpolation to target position
             currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 3; // Smooth factor
             currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 3;
 
-            // Set anchor transform (only position, no rotation for now)
+            // Get Empty Y position to preserve vertical alignment
+            const jointWorldPos = new THREE.Vector3();
+            jointEmptyRef.getWorldPosition(jointWorldPos);
+
+            // Set anchor transform (X/Z from cursor offset, Y from Empty position)
             const anchorTransform = new AmmoLib.btTransform();
             anchorTransform.setIdentity();
-            anchorTransform.setOrigin(new AmmoLib.btVector3(currentAnchorX, 0, currentAnchorZ));
+            anchorTransform.setOrigin(new AmmoLib.btVector3(
+                jointWorldPos.x + currentAnchorX,
+                jointWorldPos.y,
+                jointWorldPos.z + currentAnchorZ
+            ));
 
             rigidBodies.anchor.getMotionState().setWorldTransform(anchorTransform);
             rigidBodies.anchor.setActivationState(4); // DISABLE_DEACTIVATION
