@@ -349,11 +349,24 @@ function findToyParts(object) {
     leftLegRef = findLimb(['left_leg', 'LeftLeg', 'leftLeg', 'L_Leg', 'LLeg']);
     rightLegRef = findLimb(['right_leg', 'RightLeg', 'rightLeg', 'R_Leg', 'RLeg']);
 
+    // Find constraint objects for joint positions
+    const leftHandConstraint = findCollectionInGLTF(object, 'Constraint_left_hand');
+    const rightHandConstraint = findCollectionInGLTF(object, 'Constraint_right_hand');
+    const leftLegConstraint = findCollectionInGLTF(object, 'Constraint_left_leg');
+    const rightLegConstraint = findCollectionInGLTF(object, 'Constraint_right_leg');
+
     console.log('📋 Limbs found:', {
         leftArm: !!leftArmRef,
         rightArm: !!rightArmRef,
         leftLeg: !!leftLegRef,
         rightLeg: !!rightLegRef
+    });
+
+    console.log('🔗 Joint constraints found:', {
+        leftHand: !!leftHandConstraint,
+        rightHand: !!rightHandConstraint,
+        leftLeg: !!leftLegConstraint,
+        rightLeg: !!rightLegConstraint
     });
 
     // Show which names were found
@@ -622,15 +635,15 @@ function createConstraints() {
     console.log('✅ Created hinge constraint with motor: spinHinge');
     console.log(`   Target speed: ${targetSpeed}, Max torque: ${maxTorque}`);
 
-    // Create limb constraints (passive hinges, no motors)
-    const limbs = [
-        { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm },
-        { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm },
-        { name: 'leftLeg', ref: leftLegRef, body: rigidBodies.leftLeg },
-        { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg }
+    // Create limb constraints using constraint objects as joint positions
+    const limbConstraints = [
+        { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm, joint: leftHandConstraint },
+        { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm, joint: rightHandConstraint },
+        { name: 'leftLeg', ref: leftLegRef, body: rigidBodies.leftLeg, joint: leftLegConstraint },
+        { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg, joint: rightLegConstraint }
     ];
 
-    limbs.forEach(({ name, ref, body }) => {
+    limbConstraints.forEach(({ name, ref, body, joint }) => {
         if (!body || !ref) {
             console.log(`⚠️ Skipping constraint for ${name} - body or reference missing`);
             return;
@@ -645,9 +658,16 @@ function createConstraints() {
         });
         console.log(`📊 ${name} contains ${limbMeshCount} meshes`);
 
-        // Get joint position (use limb origin as joint)
+        // Get joint position from constraint object (or fallback to limb position)
         const jointWorld = new THREE.Vector3();
-        ref.getWorldPosition(jointWorld);
+        if (joint) {
+            joint.getWorldPosition(jointWorld);
+            console.log(`🔗 ${name} using constraint joint: ${joint.name}`);
+        } else {
+            // Fallback: use limb origin as joint
+            ref.getWorldPosition(jointWorld);
+            console.log(`⚠️ ${name} using fallback joint (limb origin)`);
+        }
 
         // Get torso physics body world position
         const torsoTransform = new AmmoLib.btTransform();
@@ -693,7 +713,7 @@ function createConstraints() {
         // Store constraint
         constraints[name] = hinge;
 
-        console.log(`✅ Created hinge constraint: ${name}`);
+        console.log(`✅ Created hinge constraint: ${name} at joint position (${jointWorld.x.toFixed(3)}, ${jointWorld.y.toFixed(3)}, ${jointWorld.z.toFixed(3)})`);
     });
 }
 
