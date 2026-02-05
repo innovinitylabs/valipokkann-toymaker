@@ -78,7 +78,6 @@ let constraints = {};
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy
 let bodyMainRef;
-let bodyMainMesh; // Actual mesh inside bodyMainRef (to avoid duplicate)
 let jointEmptyRef; // Blender Empty marking the stick-to-torso joint
 let leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty (for visual sync)
@@ -185,35 +184,20 @@ function initScene() {
                 console.warn('💡 This could explain the static + moving mesh issue');
             }
 
-            // Hide loose duplicate meshes (not in groups) - only hide numbered duplicates
-            toyGroupRef.traverse((child) => {
-                if (child.isMesh && child.parent === toyGroupRef) {
-                    // This is a loose mesh directly under scene
-                    const name = child.name || '';
-                    // Only hide meshes that end with numbers (like mesh_1, mesh_2, etc.)
-                    // indicating they are duplicates
-                    if (name.match(/_(\d+)$/)) {
-                        child.visible = false;
-                        console.log(`👻 Hidden loose duplicate mesh: ${name}`);
-                    }
-                }
-            });
+            // All meshes are important - don't hide any
 
-            // List all meshes with their positions and visibility
-            console.log('📍 All mesh positions after cleanup:');
+            // List all meshes with their positions (all should be visible)
+            console.log('📍 All mesh positions:');
             let meshIndex = 0;
-            let visibleCount = 0;
             toyGroupRef.traverse((child) => {
                 if (child.isMesh) {
                     meshIndex++;
                     const worldPos = new THREE.Vector3();
                     child.getWorldPosition(worldPos);
-                    const visibility = child.visible ? 'VISIBLE' : 'HIDDEN';
-                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)}) [${visibility}]`);
-                    if (child.visible) visibleCount++;
+                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
                 }
             });
-            console.log(`🎭 Summary: ${visibleCount}/${meshIndex} meshes visible`);
+            console.log(`🎭 All ${meshIndex} meshes are visible and important`);
             scene.add(toyGroupRef);
 
             // Find toy parts in the hierarchy
@@ -302,31 +286,17 @@ function findToyParts(object) {
         console.log('📍 Torso type:', bodyMainRef.type);
         console.log('📍 Torso children:', bodyMainRef.children.length);
         
-        // Find meshes and hide duplicates to prevent visual duplication
-        const torsoMeshes = [];
+        // Count meshes in torso group (for debugging)
+        let torsoMeshCount = 0;
         bodyMainRef.traverse((child) => {
             if (child.isMesh) {
-                torsoMeshes.push(child);
+                torsoMeshCount++;
             }
         });
 
-        console.log(`📊 bodyMainRef contains ${torsoMeshes.length} meshes`);
+        console.log(`📊 bodyMainRef contains ${torsoMeshCount} meshes`);
 
-        if (torsoMeshes.length > 0) {
-            // Use first mesh for physics sync
-            bodyMainMesh = torsoMeshes[0];
-            bodyMainMesh.visible = true; // Ensure it's visible
-            console.log('✅ Using torso mesh for sync:', bodyMainMesh.name);
-
-            // Hide duplicate meshes
-            for (let i = 1; i < torsoMeshes.length; i++) {
-                torsoMeshes[i].visible = false;
-                console.log(`👻 Hidden duplicate torso mesh: ${torsoMeshes[i].name}`);
-            }
-        } else {
-            console.warn('⚠️ No meshes found in bodyMainRef');
-            bodyMainMesh = bodyMainRef; // Fallback to group
-        }
+        console.log('✅ Using torso group for sync:', bodyMainRef.name);
     } else {
         console.error('❌ CRITICAL: body_main collection not found - cannot create torso physics');
         console.error('💡 Check that your Blender collection is named exactly: body_main');
@@ -666,22 +636,14 @@ function createConstraints() {
             return;
         }
 
-        // Hide duplicate meshes in limbs
-        const limbMeshes = [];
+        // Count meshes in limb group (for debugging)
+        let limbMeshCount = 0;
         ref.traverse((child) => {
             if (child.isMesh) {
-                limbMeshes.push(child);
+                limbMeshCount++;
             }
         });
-
-        // Keep first mesh visible, hide duplicates
-        if (limbMeshes.length > 0) {
-            limbMeshes[0].visible = true; // Ensure first mesh is visible
-        }
-        for (let i = 1; i < limbMeshes.length; i++) {
-            limbMeshes[i].visible = false;
-            console.log(`👻 Hidden duplicate ${name} mesh: ${limbMeshes[i].name}`);
-        }
+        console.log(`📊 ${name} contains ${limbMeshCount} meshes`);
 
         // Get joint position (use limb origin as joint)
         const jointWorld = new THREE.Vector3();
