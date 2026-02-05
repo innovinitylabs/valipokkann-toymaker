@@ -612,55 +612,150 @@ function animate() {
             }
 
             // Sync dynamic limbs (arms and legs follow physics)
-            // Since limbs are children of toyGroupRef, use simple world-to-local conversion
+            // CORRECT: Convert PHYSICS WORLD → VISUAL LOCAL space (position + rotation)
             if (leftArmRef && leftArmBody) {
                 try {
-                    // Physics bodies are in world space, visuals need local space relative to parent
-                    const physicsWorldPos = leftArmBody.position.clone();
-                    const parentWorldPos = new THREE.Vector3();
-                    toyGroupRef.getWorldPosition(parentWorldPos);
+                    // --- POSITION ---
+                    const parentWorldMatrix = new THREE.Matrix4();
+                    toyGroupRef.updateMatrixWorld(true);
+                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
 
-                    // Local position = physics world position - parent world position
-                    leftArmRef.position.copy(physicsWorldPos).sub(parentWorldPos);
+                    const worldPos = new THREE.Vector3(
+                        leftArmBody.position.x,
+                        leftArmBody.position.y,
+                        leftArmBody.position.z
+                    );
 
-                    // Copy rotation directly (no transformation needed for rotation)
-                    leftArmRef.quaternion.copy(leftArmBody.quaternion);
+                    leftArmRef.position.copy(
+                        worldPos.applyMatrix4(parentWorldMatrix)
+                    );
+
+                    // --- ROTATION ---
+                    const parentWorldQuat = new THREE.Quaternion();
+                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
+
+                    const physicsQuat = new THREE.Quaternion(
+                        leftArmBody.quaternion.x,
+                        leftArmBody.quaternion.y,
+                        leftArmBody.quaternion.z,
+                        leftArmBody.quaternion.w
+                    );
+
+                    // localRotation = inverse(parent) × worldRotation
+                    leftArmRef.quaternion.copy(
+                        parentWorldQuat.invert().multiply(physicsQuat)
+                    );
                 } catch (e) {
                     console.warn('Failed to sync left arm:', e.message);
                 }
             }
+
             if (rightArmRef && rightArmBody) {
                 try {
-                    const physicsWorldPos = rightArmBody.position.clone();
-                    const parentWorldPos = new THREE.Vector3();
-                    toyGroupRef.getWorldPosition(parentWorldPos);
+                    // --- POSITION ---
+                    const parentWorldMatrix = new THREE.Matrix4();
+                    toyGroupRef.updateMatrixWorld(true);
+                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
 
-                    rightArmRef.position.copy(physicsWorldPos).sub(parentWorldPos);
-                    rightArmRef.quaternion.copy(rightArmBody.quaternion);
+                    const worldPos = new THREE.Vector3(
+                        rightArmBody.position.x,
+                        rightArmBody.position.y,
+                        rightArmBody.position.z
+                    );
+
+                    rightArmRef.position.copy(
+                        worldPos.applyMatrix4(parentWorldMatrix)
+                    );
+
+                    // --- ROTATION ---
+                    const parentWorldQuat = new THREE.Quaternion();
+                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
+
+                    const physicsQuat = new THREE.Quaternion(
+                        rightArmBody.quaternion.x,
+                        rightArmBody.quaternion.y,
+                        rightArmBody.quaternion.z,
+                        rightArmBody.quaternion.w
+                    );
+
+                    // localRotation = inverse(parent) × worldRotation
+                    rightArmRef.quaternion.copy(
+                        parentWorldQuat.invert().multiply(physicsQuat)
+                    );
                 } catch (e) {
                     console.warn('Failed to sync right arm:', e.message);
                 }
             }
+
             if (leftLegRef && leftLegBody) {
                 try {
-                    const physicsWorldPos = leftLegBody.position.clone();
-                    const parentWorldPos = new THREE.Vector3();
-                    toyGroupRef.getWorldPosition(parentWorldPos);
+                    // --- POSITION ---
+                    const parentWorldMatrix = new THREE.Matrix4();
+                    toyGroupRef.updateMatrixWorld(true);
+                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
 
-                    leftLegRef.position.copy(physicsWorldPos).sub(parentWorldPos);
-                    leftLegRef.quaternion.copy(leftLegBody.quaternion);
+                    const worldPos = new THREE.Vector3(
+                        leftLegBody.position.x,
+                        leftLegBody.position.y,
+                        leftLegBody.position.z
+                    );
+
+                    leftLegRef.position.copy(
+                        worldPos.applyMatrix4(parentWorldMatrix)
+                    );
+
+                    // --- ROTATION ---
+                    const parentWorldQuat = new THREE.Quaternion();
+                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
+
+                    const physicsQuat = new THREE.Quaternion(
+                        leftLegBody.quaternion.x,
+                        leftLegBody.quaternion.y,
+                        leftLegBody.quaternion.z,
+                        leftLegBody.quaternion.w
+                    );
+
+                    // localRotation = inverse(parent) × worldRotation
+                    leftLegRef.quaternion.copy(
+                        parentWorldQuat.invert().multiply(physicsQuat)
+                    );
                 } catch (e) {
                     console.warn('Failed to sync left leg:', e.message);
                 }
             }
+
             if (rightLegRef && rightLegBody) {
                 try {
-                    const physicsWorldPos = rightLegBody.position.clone();
-                    const parentWorldPos = new THREE.Vector3();
-                    toyGroupRef.getWorldPosition(parentWorldPos);
+                    // --- POSITION ---
+                    const parentWorldMatrix = new THREE.Matrix4();
+                    toyGroupRef.updateMatrixWorld(true);
+                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
 
-                    rightLegRef.position.copy(physicsWorldPos).sub(parentWorldPos);
-                    rightLegRef.quaternion.copy(rightLegBody.quaternion);
+                    const worldPos = new THREE.Vector3(
+                        rightLegBody.position.x,
+                        rightLegBody.position.y,
+                        rightLegBody.position.z
+                    );
+
+                    rightLegRef.position.copy(
+                        worldPos.applyMatrix4(parentWorldMatrix)
+                    );
+
+                    // --- ROTATION ---
+                    const parentWorldQuat = new THREE.Quaternion();
+                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
+
+                    const physicsQuat = new THREE.Quaternion(
+                        rightLegBody.quaternion.x,
+                        rightLegBody.quaternion.y,
+                        rightLegBody.quaternion.z,
+                        rightLegBody.quaternion.w
+                    );
+
+                    // localRotation = inverse(parent) × worldRotation
+                    rightLegRef.quaternion.copy(
+                        parentWorldQuat.invert().multiply(physicsQuat)
+                    );
                 } catch (e) {
                     console.warn('Failed to sync right leg:', e.message);
                 }
