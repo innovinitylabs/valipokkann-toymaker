@@ -166,32 +166,48 @@ function findToyParts(object) {
         if (originalName === 'body_main') {
             foundParts.body = true;
             console.log('✅ FOUND: body_main (body)');
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
 
-        } else if (originalName === 'Constraint_left_hand') {
+        } else if (originalName === 'left_arm') {
             leftArmRef = child;
             foundParts.leftArm = true;
-            console.log('✅ FOUND: Constraint_left_hand → leftArmRef');
+            console.log('✅ FOUND: left_arm → leftArmRef (ACTUAL MESH GROUP)');
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
 
-        } else if (originalName === 'Constraint_right_hand') {
+        } else if (originalName === 'right_arm') {
             rightArmRef = child;
             foundParts.rightArm = true;
-            console.log('✅ FOUND: Constraint_right_hand → rightArmRef');
+            console.log('✅ FOUND: right_arm → rightArmRef (ACTUAL MESH GROUP)');
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
 
-        } else if (originalName === 'Constraint_left_leg') {
+        } else if (originalName === 'left_leg') {
             leftLegRef = child;
             foundParts.leftLeg = true;
-            console.log('✅ FOUND: Constraint_left_leg → leftLegRef');
+            console.log('✅ FOUND: left_leg → leftLegRef (ACTUAL MESH GROUP)');
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
 
-        } else if (originalName === 'Constraint_right_leg') {
+        } else if (originalName === 'right_leg') {
             rightLegRef = child;
             foundParts.rightLeg = true;
-            console.log('✅ FOUND: Constraint_right_leg → rightLegRef');
+            console.log('✅ FOUND: right_leg → rightLegRef (ACTUAL MESH GROUP)');
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
+
+        } else if (originalName === 'Constraint_left_hand' || originalName === 'Constraint_right_hand' ||
+                   originalName === 'Constraint_left_leg' || originalName === 'Constraint_right_leg') {
+            console.log(`⚠️  FOUND CONSTRAINT OBJECT: "${originalName}" - ignoring for physics`);
+            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
 
         } else {
             // Log objects that don't match our expected names but might be relevant
             if (originalName && (originalName.includes('hand') || originalName.includes('arm') ||
                 originalName.includes('leg') || originalName.includes('body'))) {
                 console.log(`⚠️  POTENTIAL MATCH: "${originalName}" (${child.type}) - not in expected list`);
+                console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
+            }
+
+            // Also log all mesh objects to understand the visual structure
+            if (child.isMesh && originalName) {
+                console.log(`🎨 MESH: "${originalName}" at (${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)})`);
             }
         }
     });
@@ -219,148 +235,287 @@ function findToyParts(object) {
 // Setup physics bodies and constraints for jumping jack motion
 function setupPhysicsBodies() {
     try {
-
         console.log('🔧 Setting up physics bodies...');
-        console.log('Available parts:', {
-            leftArm: !!leftArmRef,
-            rightArm: !!rightArmRef,
-            leftLeg: !!leftLegRef,
-            rightLeg: !!rightLegRef,
-            leftArmRef: leftArmRef,
-            rightArmRef: rightArmRef
+
+        // PHYSICAL MODEL: Stick + torso act as ONE KINEMATIC BODY
+        // Arms and legs are DYNAMIC bodies affected by gravity
+        // Connected using HINGE CONSTRAINTS with angular limits
+
+        // STEP 1: DEFINE SINGLE PHYSICS ROOT FRAME
+        // Kinematic body represents the WHOLE TOY at origin
+        bodyBody = new CANNON.Body({
+            type: CANNON.Body.KINEMATIC, // Kinematic - directly controlled, not affected by forces
+            mass: 0 // Mass doesn't matter for kinematic bodies
         });
-
-        // Debug: Check if variables are actually defined
-        if (typeof leftArmRef === 'undefined') {
-            console.error('❌ leftArmRef is undefined!');
-            return;
-        }
-
-        // Create physics bodies for each part
-        // Main body (stick/handle) - fixed in place
-        bodyBody = new CANNON.Body({ mass: 0 }); // mass: 0 = static/immovable
         bodyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 1, 0.05)));
-        bodyBody.position.set(0, 0, 0);
-        world.addBody(bodyBody);
 
-        // Only create physics bodies for parts that were found
+        // Body is ALWAYS at origin in physics space
+        bodyBody.position.set(0, 0, 0);
+        bodyBody.quaternion.set(0, 0, 0, 1);
+
+        world.addBody(bodyBody);
+        console.log('✅ Created kinematic body at physics origin');
+
+        // STEP 2: CREATE LIMB BODIES RELATIVE TO BODY
+        // All bodies share the same physics coordinate system
+
+        // Get body world position (should be ~0,0,0 after centering)
+        const bodyWorldPos = new THREE.Vector3();
+        toyGroupRef.getWorldPosition(bodyWorldPos);
+
+        // Create dynamic bodies for arms with meaningful masses
         if (leftArmRef) {
-            leftArmBody = new CANNON.Body({ mass: 0.1 });
+            const limbWorldPos = new THREE.Vector3();
+            const limbWorldQuat = new THREE.Quaternion();
+
+            leftArmRef.getWorldPosition(limbWorldPos);
+            leftArmRef.getWorldQuaternion(limbWorldQuat);
+
+            // Convert to body-local coordinates
+            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
+
+            leftArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
             leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
-            const scaledPos = leftArmRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
-            leftArmBody.position.copy(scaledPos);
+            leftArmBody.position.set(localPos.x, localPos.y, localPos.z);
+            leftArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
+
+            // Add damping for mechanical toy feel
+            leftArmBody.angularDamping = 0.4;
+
             world.addBody(leftArmBody);
-            console.log('✅ Created physics body for left arm');
+            console.log('✅ Created left arm body relative to physics root');
         }
 
         if (rightArmRef) {
-            rightArmBody = new CANNON.Body({ mass: 0.1 });
+            const limbWorldPos = new THREE.Vector3();
+            const limbWorldQuat = new THREE.Quaternion();
+
+            rightArmRef.getWorldPosition(limbWorldPos);
+            rightArmRef.getWorldQuaternion(limbWorldQuat);
+
+            // Convert to body-local coordinates
+            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
+
+            rightArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
             rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
-            const scaledPos = rightArmRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
-            rightArmBody.position.copy(scaledPos);
+            rightArmBody.position.set(localPos.x, localPos.y, localPos.z);
+            rightArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
+
+            // Add damping for mechanical toy feel
+            rightArmBody.angularDamping = 0.4;
+
             world.addBody(rightArmBody);
-            console.log('✅ Created physics body for right arm');
+            console.log('✅ Created right arm body relative to physics root');
         }
 
+        // Create dynamic bodies for legs with meaningful masses
         if (leftLegRef) {
-            leftLegBody = new CANNON.Body({ mass: 0.15 });
+            const limbWorldPos = new THREE.Vector3();
+            const limbWorldQuat = new THREE.Quaternion();
+
+            leftLegRef.getWorldPosition(limbWorldPos);
+            leftLegRef.getWorldQuaternion(limbWorldQuat);
+
+            // Convert to body-local coordinates
+            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
+
+            leftLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
             leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
-            const scaledPos = leftLegRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
-            leftLegBody.position.copy(scaledPos);
+            leftLegBody.position.set(localPos.x, localPos.y, localPos.z);
+            leftLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
+
+            // Add damping for mechanical toy feel
+            leftLegBody.angularDamping = 0.4;
+
             world.addBody(leftLegBody);
-            console.log('✅ Created physics body for left leg');
+            console.log('✅ Created left leg body relative to physics root');
         }
 
         if (rightLegRef) {
-            rightLegBody = new CANNON.Body({ mass: 0.15 });
+            const limbWorldPos = new THREE.Vector3();
+            const limbWorldQuat = new THREE.Quaternion();
+
+            rightLegRef.getWorldPosition(limbWorldPos);
+            rightLegRef.getWorldQuaternion(limbWorldQuat);
+
+            // Convert to body-local coordinates
+            const localPos = limbWorldPos.clone().sub(bodyWorldPos);
+
+            rightLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
             rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
-            const scaledPos = rightLegRef.position.clone().multiplyScalar(toyGroupRef.scale.x);
-            rightLegBody.position.copy(scaledPos);
+            rightLegBody.position.set(localPos.x, localPos.y, localPos.z);
+            rightLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
+
+            // Add damping for mechanical toy feel
+            rightLegBody.angularDamping = 0.4;
+
             world.addBody(rightLegBody);
-            console.log('✅ Created physics body for right leg');
+            console.log('✅ Created right leg body relative to physics root');
         }
 
-        // Create hinge constraints for jumping jack motion (only for bodies that exist)
-        console.log('🔗 Creating physics constraints...');
+        // STEP 3: COMPUTE HINGE PIVOTS FOR MECHANICAL TOY
+        console.log('🔗 Computing hinge pivots for mechanical linkages...');
 
-        // Arms - constrained to swing around Z axis at shoulder height
+        // Arms: hinge around X-axis for forward/backward swing
         if (leftArmBody) {
+            // Mechanical attachment: left arm connects at top of stick/handle
+            const jointPos = new CANNON.Vec3(-0.15, 0.4, 0); // Mechanical left arm joint
+
+            // pivotA: joint position in stick local space
+            const pivotA = jointPos;
+
+            // pivotB: attachment point in arm local space
+            const pivotB = new CANNON.Vec3(0, 0, 0);
+
             leftArmConstraint = new CANNON.HingeConstraint(bodyBody, leftArmBody, {
-                pivotA: new CANNON.Vec3(-0.05, 0.3, 0),
-                pivotB: new CANNON.Vec3(0, -0.4, 0),
-                axisA: new CANNON.Vec3(0, 0, 1),
-                axisB: new CANNON.Vec3(0, 0, 1)
+                pivotA: pivotA,
+                pivotB: pivotB,
+                axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
+                axisB: new CANNON.Vec3(1, 0, 0)
             });
+            leftArmConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(leftArmConstraint);
-            console.log('✅ Created left arm constraint');
+            console.log('✅ Created left arm hinge constraint with mechanical pivots');
         }
 
         if (rightArmBody) {
+            // Mechanical attachment: right arm connects at top of stick/handle
+            const jointPos = new CANNON.Vec3(0.15, 0.4, 0); // Mechanical right arm joint
+
+            // pivotA: joint position in stick local space
+            const pivotA = jointPos;
+
+            // pivotB: attachment point in arm local space
+            const pivotB = new CANNON.Vec3(0, 0, 0);
+
             rightArmConstraint = new CANNON.HingeConstraint(bodyBody, rightArmBody, {
-                pivotA: new CANNON.Vec3(0.05, 0.3, 0),
-                pivotB: new CANNON.Vec3(0, -0.4, 0),
-                axisA: new CANNON.Vec3(0, 0, 1),
-                axisB: new CANNON.Vec3(0, 0, 1)
+                pivotA: pivotA,
+                pivotB: pivotB,
+                axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
+                axisB: new CANNON.Vec3(1, 0, 0)
             });
+            rightArmConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(rightArmConstraint);
-            console.log('✅ Created right arm constraint');
+            console.log('✅ Created right arm hinge constraint with mechanical pivots');
         }
 
-        // Legs - constrained to swing around Z axis at hip height
+        // Legs: hinge around Z-axis for left/right swing
         if (leftLegBody) {
+            // Mechanical attachment: left leg connects at bottom of stick/handle
+            const jointPos = new CANNON.Vec3(-0.12, -0.4, 0); // Mechanical left leg joint
+
+            // pivotA: joint position in stick local space
+            const pivotA = jointPos;
+
+            // pivotB: attachment point in leg local space
+            const pivotB = new CANNON.Vec3(0, 0, 0);
+
             leftLegConstraint = new CANNON.HingeConstraint(bodyBody, leftLegBody, {
-                pivotA: new CANNON.Vec3(-0.05, -0.1, 0),
-                pivotB: new CANNON.Vec3(0, 0.5, 0),
-                axisA: new CANNON.Vec3(0, 0, 1),
+                pivotA: pivotA,
+                pivotB: pivotB,
+                axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
                 axisB: new CANNON.Vec3(0, 0, 1)
             });
+            leftLegConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(leftLegConstraint);
-            console.log('✅ Created left leg constraint');
+            console.log('✅ Created left leg hinge constraint with mechanical pivots');
         }
 
         if (rightLegBody) {
+            // Mechanical attachment: right leg connects at bottom of stick/handle
+            const jointPos = new CANNON.Vec3(0.12, -0.4, 0); // Mechanical right leg joint
+
+            // pivotA: joint position in stick local space
+            const pivotA = jointPos;
+
+            // pivotB: attachment point in leg local space
+            const pivotB = new CANNON.Vec3(0, 0, 0);
+
             rightLegConstraint = new CANNON.HingeConstraint(bodyBody, rightLegBody, {
-                pivotA: new CANNON.Vec3(0.05, -0.1, 0),
-                pivotB: new CANNON.Vec3(0, 0.5, 0),
-                axisA: new CANNON.Vec3(0, 0, 1),
+                pivotA: pivotA,
+                pivotB: pivotB,
+                axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
                 axisB: new CANNON.Vec3(0, 0, 1)
             });
+            rightLegConstraint.collideConnected = false; // Prevent self-collision
             world.addConstraint(rightLegConstraint);
-            console.log('✅ Created right leg constraint');
+            console.log('✅ Created right leg hinge constraint with mechanical pivots');
         }
 
-        console.log('✅ Physics bodies and constraints created successfully');
-        console.log('🎮 Physics jumping jack ready - click to spin!');
+        // STEP 2: ADD POSITIONAL LOCKS AT EACH JOINT (PREVENTS DRIFT)
+        console.log('🔒 Adding positional locks for rigid mechanical joints...');
+
+        // Lock constraints prevent positional drift while hinges allow rotation
+        if (leftArmBody) {
+            const leftArmLock = new CANNON.LockConstraint(bodyBody, leftArmBody, {
+                maxForce: 1e6  // Strong positional lock
+            });
+            leftArmLock.collideConnected = false; // Prevent self-collision
+            world.addConstraint(leftArmLock);
+            console.log('✅ Added left arm positional lock');
+        }
+
+        if (rightArmBody) {
+            const rightArmLock = new CANNON.LockConstraint(bodyBody, rightArmBody, {
+                maxForce: 1e6  // Strong positional lock
+            });
+            rightArmLock.collideConnected = false; // Prevent self-collision
+            world.addConstraint(rightArmLock);
+            console.log('✅ Added right arm positional lock');
+        }
+
+        if (leftLegBody) {
+            const leftLegLock = new CANNON.LockConstraint(bodyBody, leftLegBody, {
+                maxForce: 1e6  // Strong positional lock
+            });
+            leftLegLock.collideConnected = false; // Prevent self-collision
+            world.addConstraint(leftLegLock);
+            console.log('✅ Added left leg positional lock');
+        }
+
+        if (rightLegBody) {
+            const rightLegLock = new CANNON.LockConstraint(bodyBody, rightLegBody, {
+                maxForce: 1e6  // Strong positional lock
+            });
+            rightLegLock.collideConnected = false; // Prevent self-collision
+            world.addConstraint(rightLegLock);
+            console.log('✅ Added right leg positional lock');
+        }
+
+        console.log('✅ Physics setup complete - jumping jack with mechanical linkages');
+        console.log('🎮 Physics jumping jack ready - move mouse to tilt, click to spin!');
 
     } catch (error) {
         console.error('❌ Error setting up physics:', error);
-        console.error('Falling back to basic interaction mode');
-
-        // Fallback: simple direct rotation for basic interaction
-        bodyBody = null; // Disable physics mode
-        console.log('🔄 Basic rotation mode enabled - move mouse to tilt, click to spin');
+        console.error('Physics setup failed - no fallback mode available');
     }
 }
-
-// Animation variables (removed - using direct spin animation instead)
 
 // Mouse interaction variables
 const mouse = new THREE.Vector2();
 let mousePressed = false;
 
-// Toy tilt variables (subtle rotations based on mouse position)
-const maxToyTiltX = Math.PI / 6; // ±30 degrees X tilt
-const maxToyTiltY = Math.PI / 8; // ±22.5 degrees Y tilt
+// glTF runtime is Y-up. This is the ONLY vertical axis.
+const VERTICAL_AXIS = new CANNON.Vec3(0, 1, 0);
 
-// Animation constants for spin effect
-const SPIN_DURATION = 2000; // 2 seconds for spin animation
+// Toy tilt variables - mouse controls kinematic body tilting
+const maxToyTiltX = Math.PI / 6; // ±30 degrees X tilt (front/back)
+const maxToyTiltY = Math.PI / 8; // ±22.5 degrees Y tilt (left/right)
+
+// Persistent rotation quaternions (glTF Y-up space)
+let spinQuaternion = new CANNON.Quaternion(0, 0, 0, 1); // Identity quaternion for accumulated spin around vertical axis
+let tiltQuaternion = new CANNON.Quaternion(0, 0, 0, 1); // Identity quaternion for tilt
 
 // Physics world setup
 const world = new CANNON.World();
-world.gravity.set(0, -9.82, 0); // Earth gravity
+world.gravity.set(0, -4.0, 0); // Reduced gravity for mechanical toy physics
 world.broadphase = new CANNON.SAPBroadphase(world);
 world.defaultContactMaterial.friction = 0.4;
 world.defaultContactMaterial.restitution = 0.3;
+
+// Strengthen solver for rigid mechanical joints
+world.solver.iterations = 40;
+world.solver.tolerance = 0.001;
 
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
@@ -384,46 +539,27 @@ function onMouseDown(event) {
     try {
         mousePressed = true;
 
-        // Physics mode: Apply physics-based spin to all rigid bodies that exist
-        let hasPhysicsBodies = false;
-
+        // CLICK BEHAVIOR: Spin around CURRENT LOCAL VERTICAL AXIS of the kinematic body
         if (bodyBody) {
-            const spinVelocity = (Math.random() - 0.5) * 10; // Random spin speed
-            bodyBody.angularVelocity.set(0, spinVelocity, 0);
-            hasPhysicsBodies = true;
-        }
+            const randomAngle = (Math.random() - 0.5) * Math.PI * 4; // Random angle between -2π and +2π
 
-        if (leftArmBody) {
-            const spinVelocity = (Math.random() - 0.5) * 10;
-            leftArmBody.angularVelocity.set(0, spinVelocity, 0);
-            hasPhysicsBodies = true;
-        }
+            // Step 1: get current orientation
+            const q = bodyBody.quaternion;
 
-        if (rightArmBody) {
-            const spinVelocity = (Math.random() - 0.5) * 10;
-            rightArmBody.angularVelocity.set(0, spinVelocity, 0);
-            hasPhysicsBodies = true;
-        }
+            // Step 2: compute local vertical axis in world space
+            const worldSpinAxis = q.vmult(VERTICAL_AXIS);
 
-        if (leftLegBody) {
-            const spinVelocity = (Math.random() - 0.5) * 10;
-            leftLegBody.angularVelocity.set(0, spinVelocity, 0);
-            hasPhysicsBodies = true;
-        }
+            // Step 3: create spin quaternion around THAT axis
+            const spinQuat = new CANNON.Quaternion();
+            spinQuat.setFromAxisAngle(worldSpinAxis, randomAngle);
 
-        if (rightLegBody) {
-            const spinVelocity = (Math.random() - 0.5) * 10;
-            rightLegBody.angularVelocity.set(0, spinVelocity, 0);
-            hasPhysicsBodies = true;
-        }
+            // Step 4: apply spin WITHOUT destroying tilt
+            spinQuaternion = spinQuat.mult(spinQuaternion);
 
-        if (hasPhysicsBodies) {
-            console.log('🎪 Physics spin initiated - watch the jumping jack motion!');
-        } else if (toyGroupRef) {
-            // Fallback mode: Simple direct rotation
-            const randomAngle = (Math.random() - 0.5) * Math.PI * 4;
-            toyGroupRef.rotation.y = randomAngle;
-            console.log('🔄 Basic spin applied');
+            // Step 5: final orientation = spin × tilt
+            bodyBody.quaternion = spinQuaternion.mult(tiltQuaternion);
+
+            console.log('🎪 Spin around body\'s current local vertical axis!');
         }
     } catch (error) {
         console.error('❌ Mouse down error:', error);
@@ -454,45 +590,69 @@ function onMouseWheel(event) {
 // Update toy interaction based on mouse position
 function updateToyInteraction() {
     try {
-        // Physics mode: Apply physics forces to bodies that exist
+        // MOUSE TILT: Respect Blender local space axes
         if (bodyBody) {
-            // Apply subtle physics forces based on mouse position for realistic tilting
-            // Mouse X affects side-to-side tilting (torque around Z axis)
-            const tiltForceZ = mouse.x * 2; // Side-to-side force
+            // Mouse X: left/right tilt → rotate around Blender Y axis (0, 1, 0)
+            const leftRightAngle = mouse.x * maxToyTiltY;
 
-            // Mouse Y affects forward-backward tilting (torque around X axis)
-            const tiltForceX = mouse.y * 2; // Forward-backward force
+            // Mouse Y: front/back tilt → rotate around Blender X axis (1, 0, 0)
+            const frontBackAngle = mouse.y * maxToyTiltX;
 
-            // Apply combined torques
-            bodyBody.torque.set(tiltForceX, 0, tiltForceZ);
+            // Create tilt quaternions
+            const yRotation = new CANNON.Quaternion(); // Left/right tilt around Y-axis
+            yRotation.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), leftRightAngle);
 
-            // Apply damping to prevent excessive spinning
-            const damping = 0.95;
-            bodyBody.angularVelocity.scale(damping, bodyBody.angularVelocity);
-        } else if (toyGroupRef) {
-            // Fallback mode: Simple direct tilting
-            const toyRotationY = mouse.x * maxToyTiltY;
-            const toyRotationX = mouse.y * maxToyTiltX;
-            toyGroupRef.rotation.y = toyRotationY;
-            toyGroupRef.rotation.x = toyRotationX;
+            const xRotation = new CANNON.Quaternion(); // Front/back tilt around X-axis
+            xRotation.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), frontBackAngle);
+
+            // Combine tilt rotations: tiltQuaternion = yRotation × xRotation
+            tiltQuaternion = yRotation.mult(xRotation);
+
+            // DRIVE KINEMATIC BODY WITH SMOOTH INTERPOLATION (allows physics impulses)
+            const targetQuat = spinQuaternion.mult(tiltQuaternion);
+
+            // Linear quaternion interpolation for Cannon.js (no built-in slerp)
+            const slerpFactor = 0.15;
+            bodyBody.quaternion.x = bodyBody.quaternion.x * (1 - slerpFactor) + targetQuat.x * slerpFactor;
+            bodyBody.quaternion.y = bodyBody.quaternion.y * (1 - slerpFactor) + targetQuat.y * slerpFactor;
+            bodyBody.quaternion.z = bodyBody.quaternion.z * (1 - slerpFactor) + targetQuat.z * slerpFactor;
+            bodyBody.quaternion.w = bodyBody.quaternion.w * (1 - slerpFactor) + targetQuat.w * slerpFactor;
+
+            // Normalize to prevent drift
+            const len = Math.sqrt(bodyBody.quaternion.x**2 + bodyBody.quaternion.y**2 + bodyBody.quaternion.z**2 + bodyBody.quaternion.w**2);
+            if (len > 0) {
+                bodyBody.quaternion.x /= len;
+                bodyBody.quaternion.y /= len;
+                bodyBody.quaternion.z /= len;
+                bodyBody.quaternion.w /= len;
+            }
         }
     } catch (error) {
         console.error('❌ Toy interaction error:', error);
     }
 }
 
-// Spin animation is handled directly in onMouseDown with requestAnimationFrame
+// Mouse interaction drives kinematic body directly - no animation timers needed
 
 // Animation loop
 function animate() {
     try {
         requestAnimationFrame(animate);
 
-        // Update physics simulation only if bodies exist
+        // Update physics simulation - kinematic driver controls dynamic limbs
         if (world && bodyBody) {
             world.step(1/60); // 60 FPS physics
 
-            // Sync Three.js meshes with physics bodies (only for bodies that exist)
+            // SYNC RULE: Each animation frame copy Cannon body position + quaternion → matching Three.js object
+            // Do NOT modify Three.js transforms directly - physics bodies drive everything
+
+            // Sync kinematic driver (stick/torso) to Three.js group
+            if (toyGroupRef) {
+                toyGroupRef.position.copy(bodyBody.position);
+                toyGroupRef.quaternion.copy(bodyBody.quaternion);
+            }
+
+            // Sync dynamic limbs (arms and legs follow physics)
             if (leftArmRef && leftArmBody) {
                 leftArmRef.position.copy(leftArmBody.position);
                 leftArmRef.quaternion.copy(leftArmBody.quaternion);
