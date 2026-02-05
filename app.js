@@ -534,9 +534,9 @@ function animate(currentTime = 0) {
 }
 
 // STEP 9: SYNC PHYSICS → THREE (MANDATORY)
-const tmpTrans = new AmmoLib.btTransform();
-
 function syncPhysicsToThree() {
+    const tmpTrans = new AmmoLib.btTransform();
+
     // Sync torso from physics to Three.js
     if (rigidBodies.torso && bodyMainRef) {
         const motionState = rigidBodies.torso.getMotionState();
