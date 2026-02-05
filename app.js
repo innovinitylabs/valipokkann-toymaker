@@ -270,10 +270,15 @@ function findToyParts(object) {
     });
 
     // Only need body_main for now - we'll add limbs later
-    bodyMainRef = findCollectionInGLTF(object, 'body_main');
+    bodyMainRef = findCollectionInGLTF(object, 'body_main') ||
+                  findCollectionInGLTF(object, 'Body') ||
+                  findCollectionInGLTF(object, 'body') ||
+                  findCollectionInGLTF(object, 'torso') ||
+                  findCollectionInGLTF(object, 'Torso');
 
     if (bodyMainRef) {
-        console.log('✅ FOUND: body_main collection → will use for torso physics');
+        console.log('✅ FOUND: body object → will use for torso physics');
+        console.log('📍 Torso name:', bodyMainRef.name);
         console.log('📍 Torso position:', bodyMainRef.position);
         console.log('📍 Torso rotation:', bodyMainRef.rotation);
         console.log('📍 Torso type:', bodyMainRef.type);
@@ -309,27 +314,70 @@ function findToyParts(object) {
     }
 
     // STEP 1: IDENTIFY THE JOINT EMPTY
-    jointEmptyRef = findCollectionInGLTF(object, 'Empty001') 
-                 || findCollectionInGLTF(object, 'Empty002');
+    // Search for Empty objects with various possible names after renaming
+    const emptyNames = ['Empty001', 'Empty002', 'Empty', 'empty', 'joint', 'Joint', 'pivot', 'Pivot'];
+    jointEmptyRef = null;
+
+    // First try specific names
+    for (const name of emptyNames) {
+        jointEmptyRef = findCollectionInGLTF(object, name);
+        if (jointEmptyRef) break;
+    }
+
+    // If not found, search for any object containing "empty" or "joint" in the name
+    if (!jointEmptyRef) {
+        object.traverse((child) => {
+            if (!jointEmptyRef && child.name) {
+                const name = child.name.toLowerCase();
+                if (name.includes('empty') || name.includes('joint') || name.includes('pivot')) {
+                    jointEmptyRef = child;
+                    console.log('✅ Found Empty-like object by pattern matching:', child.name);
+                }
+            }
+        });
+    }
 
     if (!jointEmptyRef) {
-        console.error('❌ Joint Empty not found — check Blender file');
+        console.error('❌ Joint Empty not found — searched for: Empty001, Empty002, Empty, joint, pivot');
+        console.error('💡 Check Blender: ensure the Empty object exists and has a recognizable name');
+
+        // List all objects to help identify the Empty
+        console.log('📋 All available objects in GLTF:');
+        object.traverse((child) => {
+            console.log(`   "${child.name}" (${child.type})`);
+        });
     } else {
         console.log('✅ Joint Empty found:', jointEmptyRef.name);
         console.log('📍 Joint Empty position:', jointEmptyRef.position);
     }
 
-    // Find limbs for future physics setup
-    leftArmRef = findCollectionInGLTF(object, 'left_arm');
-    rightArmRef = findCollectionInGLTF(object, 'right_arm');
-    leftLegRef = findCollectionInGLTF(object, 'left_leg');
-    rightLegRef = findCollectionInGLTF(object, 'right_leg');
+    // Find limbs for future physics setup - try multiple naming patterns
+    const findLimb = (patterns) => {
+        for (const pattern of patterns) {
+            const found = findCollectionInGLTF(object, pattern);
+            if (found) return found;
+        }
+        return null;
+    };
+
+    leftArmRef = findLimb(['left_arm', 'LeftArm', 'leftArm', 'L_Arm', 'LArm']);
+    rightArmRef = findLimb(['right_arm', 'RightArm', 'rightArm', 'R_Arm', 'RArm']);
+    leftLegRef = findLimb(['left_leg', 'LeftLeg', 'leftLeg', 'L_Leg', 'LLeg']);
+    rightLegRef = findLimb(['right_leg', 'RightLeg', 'rightLeg', 'R_Leg', 'RLeg']);
 
     console.log('📋 Limbs found:', {
         leftArm: !!leftArmRef,
         rightArm: !!rightArmRef,
         leftLeg: !!leftLegRef,
         rightLeg: !!rightLegRef
+    });
+
+    // Show which names were found
+    const limbRefs = { leftArmRef, rightArmRef, leftLegRef, rightLegRef };
+    Object.entries(limbRefs).forEach(([key, ref]) => {
+        if (ref) {
+            console.log(`✅ ${key}: "${ref.name}"`);
+        }
     });
 
     // Debug limb structure
