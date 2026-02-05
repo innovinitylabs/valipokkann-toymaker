@@ -1031,6 +1031,12 @@ function animate(currentTime = 0) {
         if (AmmoLib && physicsWorld) {
             // Apply mouse torques to tilt torso for testing hinge physics
             if (rigidBodies.torso) {
+                // DEBUG: Check if torso is dynamic
+                const flags = rigidBodies.torso.getCollisionFlags();
+                const isKinematic = (flags & 2) !== 0;
+                if (frameCount < 2) {
+                    console.log(`🔍 Torso collision flags: ${flags}, isKinematic: ${isKinematic}`);
+                }
                 // Smooth interpolation to target position
                 currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 1.5;
                 currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 1.5;
@@ -1045,9 +1051,18 @@ function animate(currentTime = 0) {
                     new AmmoLib.btVector3(torqueX, 0, torqueZ)
                 );
 
-                // DEBUG: Log torque application
+                // DEBUG: Also apply impulse for immediate effect
+                if (Math.abs(currentAnchorX) > 0.1 || Math.abs(currentAnchorZ) > 0.1) {
+                    rigidBodies.torso.applyTorqueImpulse(
+                        new AmmoLib.btVector3(torqueX * 0.1, 0, torqueZ * 0.1)
+                    );
+                    console.log(`💥 Applied torque impulse: X=${(torqueX * 0.1).toFixed(2)}, Z=${(torqueZ * 0.1).toFixed(2)}`);
+                }
+
+                // DEBUG: Log torque application and check angular velocity
                 if (Math.abs(torqueX) > 1 || Math.abs(torqueZ) > 1) {
-                    console.log(`🔄 Applying torque: X=${torqueX.toFixed(2)}, Z=${torqueZ.toFixed(2)}`);
+                    const angVel = rigidBodies.torso.getAngularVelocity();
+                    console.log(`🔄 Applied torque: X=${torqueX.toFixed(2)}, Z=${torqueZ.toFixed(2)} | AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
                 }
 
                 // Set moderate damping for controlled motion (not too much)
@@ -1154,15 +1169,23 @@ function syncPhysicsToThree() {
                     return;
                 }
 
-                // Debug: Log first few successful syncs
-                if (syncCount < 3) {
-                    syncCount++;
-                    console.log(`🔄 Torso sync ${syncCount}: pos (${p.x().toFixed(3)}, ${p.y().toFixed(3)}, ${p.z().toFixed(3)})`);
-                }
+                // DEBUG: Always log torso sync for now
+                console.log(`🔄 Torso sync: pos (${p.x().toFixed(3)}, ${p.y().toFixed(3)}, ${p.z().toFixed(3)}) rot (${q.x().toFixed(3)}, ${q.y().toFixed(3)}, ${q.z().toFixed(3)}, ${q.w().toFixed(3)})`);
+
+                // Check if mesh actually updates
+                const oldPos = bodyMainRef.position.clone();
+                const oldQuat = bodyMainRef.quaternion.clone();
 
                 // Sync to the group - groups handle hierarchical transforms correctly
                 bodyMainRef.position.set(p.x(), p.y(), p.z());
                 bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
+
+                // Check if it changed
+                if (!oldPos.equals(bodyMainRef.position) || !oldQuat.equals(bodyMainRef.quaternion)) {
+                    console.log('✅ Mesh position/rotation updated');
+                } else {
+                    console.log('⚠️ Mesh position/rotation unchanged');
+                }
             } catch (e) {
                 console.error('❌ Error getting torso transform:', e);
                 return;
