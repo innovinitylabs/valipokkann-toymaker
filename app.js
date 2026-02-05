@@ -74,6 +74,7 @@ let AmmoLib = null;
 let physicsWorld;
 let rigidBodies = {};
 let constraints = [];
+let physicsMeshMap; // MANDATORY: Maps meshes to physics bodies
 
 // Toy hierarchy references - will be set after GLTF loads
 let toyGroupRef; // Root group of the toy
@@ -274,6 +275,14 @@ function initPhysics() {
 
         // Create hinge constraints
         createConstraints();
+
+        // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
+        physicsMeshMap = new Map();
+        physicsMeshMap.set(bodyMainRef, rigidBodies.torso);
+        physicsMeshMap.set(leftArmRef, rigidBodies.leftArm);
+        physicsMeshMap.set(rightArmRef, rigidBodies.rightArm);
+        physicsMeshMap.set(leftLegRef, rigidBodies.leftLeg);
+        physicsMeshMap.set(rightLegRef, rigidBodies.rightLeg);
 
         console.log('🎮 Ammo.js jumping jack ready - move mouse to tilt, click to apply torque!');
         console.log('💡 Try clicking to apply torque and watch the physics simulation!');
@@ -642,8 +651,8 @@ function animate(currentTime = 0) {
             physicsWorld.stepSimulation(delta, 10, 1/60); // Fixed time step for stability
         }
 
-        // Sync physics transforms to Three.js meshes
-        syncPhysicsToMeshes();
+        // Sync physics to Three.js (MANDATORY - NO EXCEPTIONS)
+        syncPhysicsToThree();
 
         renderer.render(scene, camera);
     } catch (error) {
@@ -655,44 +664,21 @@ function animate(currentTime = 0) {
     }
 }
 
-// Sync Bullet physics transforms to Three.js groups
-function syncPhysicsToMeshes() {
-    try {
-        // Helper function to sync a single rigid body to its group
-        function syncBody(body, group, name) {
-            if (!body || !group) return;
+// ADD THE ONLY VALID SYNC FUNCTION (MANDATORY)
+const tmpTrans = new Ammo.btTransform();
 
-            // Get transform from physics body
-            const transform = new Ammo.btTransform();
-            body.getMotionState().getWorldTransform(transform);
+function syncPhysicsToThree() {
+    for (const [mesh, body] of physicsMeshMap) {
+        const motionState = body.getMotionState();
+        if (!motionState) continue;
 
-            const origin = transform.getOrigin();
-            const rotation = transform.getRotation();
+        motionState.getWorldTransform(tmpTrans);
 
-            // Store original group transform if not already stored
-            if (!group.userData.originalPosition) {
-                group.userData.originalPosition = group.position.clone();
-                group.userData.originalQuaternion = group.quaternion.clone();
-                console.log(`💾 Stored original transform for ${name} group:`, group.userData.originalPosition);
-            }
+        const p = tmpTrans.getOrigin();
+        const q = tmpTrans.getRotation();
 
-            // Apply physics transform to the group (world space)
-            group.position.set(origin.x(), origin.y(), origin.z());
-            group.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
-
-            // Force update matrix
-            group.updateMatrix();
-        }
-
-        // Sync all rigid bodies to their groups
-        syncBody(rigidBodies.torso, bodyMainRef, 'torso');
-        syncBody(rigidBodies.leftArm, leftArmRef, 'leftArm');
-        syncBody(rigidBodies.rightArm, rightArmRef, 'rightArm');
-        syncBody(rigidBodies.leftLeg, leftLegRef, 'leftLeg');
-        syncBody(rigidBodies.rightLeg, rightLegRef, 'rightLeg');
-
-    } catch (error) {
-        console.error('❌ Physics sync error:', error);
+        mesh.position.set(p.x(), p.y(), p.z());
+        mesh.quaternion.set(q.x(), q.y(), q.z(), q.w());
     }
 }
 
