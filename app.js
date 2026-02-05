@@ -129,9 +129,21 @@ loader.load(
     }
 );
 
+// Find mesh within a GLTF collection group
+function findMeshInCollection(collection) {
+    let foundMesh = null;
+    collection.traverse((child) => {
+        if (child.isMesh && !foundMesh) {
+            foundMesh = child;
+        }
+    });
+    return foundMesh;
+}
+
 // Find toy parts in GLTF hierarchy for physics setup
 function findToyParts(object) {
     console.log('=== GLTF ANALYSIS FOR AMMO.JS PHYSICS ===');
+    console.log('🔍 Looking for Blender collections that became Groups in GLTF...');
 
     let objectCount = 0;
     const foundParts = {
@@ -142,31 +154,65 @@ function findToyParts(object) {
         rightLeg: false
     };
 
-    // Find the actual mesh objects we need for physics
+    // First pass: list ALL objects to understand structure
+    console.log('📋 ALL GLTF OBJECTS:');
     object.traverse((child) => {
         objectCount++;
+        const displayName = child.name || 'unnamed';
+        console.log(`   ${objectCount}. "${displayName}" (${child.type})`);
+
+        // Check if this is one of our target collections
         const name = child.name || '';
 
-        if (name === 'body_main') {
-            bodyMainRef = child;
-            foundParts.body = true;
-            console.log('✅ FOUND: body_main (torso)');
-        } else if (name === 'left_arm') {
-            leftArmRef = child;
-            foundParts.leftArm = true;
-            console.log('✅ FOUND: left_arm');
-        } else if (name === 'right_arm') {
-            rightArmRef = child;
-            foundParts.rightArm = true;
-            console.log('✅ FOUND: right_arm');
-        } else if (name === 'left_leg') {
-            leftLegRef = child;
-            foundParts.leftLeg = true;
-            console.log('✅ FOUND: left_leg');
-        } else if (name === 'right_leg') {
-            rightLegRef = child;
-            foundParts.rightLeg = true;
-            console.log('✅ FOUND: right_leg');
+        if (name === 'body_main' && child.type === 'Group') {
+            const mesh = findMeshInCollection(child);
+            if (mesh) {
+                bodyMainRef = mesh; // Use the mesh, not the group
+                foundParts.body = true;
+                console.log('✅ FOUND: body_main collection → mesh for torso');
+            } else {
+                console.log('⚠️  FOUND: body_main collection but no mesh inside');
+            }
+
+        } else if (name === 'left_arm' && child.type === 'Group') {
+            const mesh = findMeshInCollection(child);
+            if (mesh) {
+                leftArmRef = mesh;
+                foundParts.leftArm = true;
+                console.log('✅ FOUND: left_arm collection → mesh');
+            } else {
+                console.log('⚠️  FOUND: left_arm collection but no mesh inside');
+            }
+
+        } else if (name === 'right_arm' && child.type === 'Group') {
+            const mesh = findMeshInCollection(child);
+            if (mesh) {
+                rightArmRef = mesh;
+                foundParts.rightArm = true;
+                console.log('✅ FOUND: right_arm collection → mesh');
+            } else {
+                console.log('⚠️  FOUND: right_arm collection but no mesh inside');
+            }
+
+        } else if (name === 'left_leg' && child.type === 'Group') {
+            const mesh = findMeshInCollection(child);
+            if (mesh) {
+                leftLegRef = mesh;
+                foundParts.leftLeg = true;
+                console.log('✅ FOUND: left_leg collection → mesh');
+            } else {
+                console.log('⚠️  FOUND: left_leg collection but no mesh inside');
+            }
+
+        } else if (name === 'right_leg' && child.type === 'Group') {
+            const mesh = findMeshInCollection(child);
+            if (mesh) {
+                rightLegRef = mesh;
+                foundParts.rightLeg = true;
+                console.log('✅ FOUND: right_leg collection → mesh');
+            } else {
+                console.log('⚠️  FOUND: right_leg collection but no mesh inside');
+            }
         }
     });
 
@@ -181,7 +227,8 @@ function findToyParts(object) {
     console.log(`\n🎯 AMMO.JS READY: ${foundCount}/5 parts found`);
 
     if (!foundParts.body) {
-        console.error('❌ CRITICAL: body_main not found - physics cannot initialize');
+        console.error('❌ CRITICAL: body_main collection or mesh not found - physics cannot initialize');
+        console.error('💡 Check that your Blender collections are named exactly: body_main, left_arm, right_arm, left_leg, right_leg');
     }
 }
 
