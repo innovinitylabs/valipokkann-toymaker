@@ -80,37 +80,34 @@ let physicsReady = false; // Flag to track when physics system is initialized
 let toyGroupRef; // Root group of the toy
 let bodyMainRef, leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 
-// Load the GLTF model and initialize physics
-loader.load(
-    'ToyMaker_anim1.glb',
-    (gltf) => {
-        toyGroupRef = gltf.scene;
+// Wait for Ammo.js to load, then load GLTF and initialize physics
+const initApp = () => {
+    console.log('🔄 Waiting for Ammo.js to be ready...');
 
-        // Enable shadows
-        toyGroupRef.traverse((child) => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
-        });
+    if (typeof Ammo === 'function') {
+        console.log('✅ Ammo.js is ready, starting GLTF loading...');
 
-        scene.add(toyGroupRef);
+        // Load the GLTF model and initialize physics
+        loader.load(
+            'ToyMaker_anim1.glb',
+            (gltf) => {
+                toyGroupRef = gltf.scene;
 
-        // Find toy parts in the hierarchy
-        findToyParts(toyGroupRef);
+                // Enable shadows
+                toyGroupRef.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
 
-        // Initialize physics after GLTF is loaded
-        // Wait for Ammo.js to be available
-        console.log('🔄 Initializing Ammo.js physics...');
+                scene.add(toyGroupRef);
 
-        const tryInitAmmo = () => {
-            console.log('🔍 Checking Ammo availability...');
-            console.log('  - typeof Ammo:', typeof Ammo);
-            console.log('  - window.Ammo exists:', 'Ammo' in window);
-            console.log('  - Ammo value:', Ammo);
+                // Find toy parts in the hierarchy
+                findToyParts(toyGroupRef);
 
-            if (typeof Ammo === 'function') {
-                console.log('✅ Ammo.js function found, initializing physics...');
+                // Initialize physics now that both GLTF and Ammo are ready
+                console.log('🎯 Both GLTF and Ammo.js ready - initializing physics...');
                 Ammo().then((AmmoLib) => {
                     console.log('✅ Ammo() promise resolved');
                     Ammo = AmmoLib;
@@ -129,26 +126,27 @@ loader.load(
                 }).catch((error) => {
                     console.error('❌ Ammo() promise failed:', error);
                 });
-            } else {
-                console.log('⏳ Ammo.js not ready yet, will retry...');
-                // Retry after a short delay
-                setTimeout(tryInitAmmo, 500);
+
+                console.log('GLTF loaded successfully');
+                console.log('Toy hierarchy:', toyGroupRef);
+            },
+            (progress) => {
+                console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+            },
+            (error) => {
+                console.error('Error loading GLTF:', error);
+                console.error('Make sure ToyMaker_anim1.glb is in the same directory as index.html');
             }
-        };
-
-        tryInitAmmo();
-
-        console.log('GLTF loaded successfully');
-        console.log('Toy hierarchy:', toyGroupRef);
-    },
-    (progress) => {
-        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-    },
-    (error) => {
-        console.error('Error loading GLTF:', error);
-        console.error('Make sure ToyMaker_anim1.glb is in the same directory as index.html');
+        );
+    } else {
+        console.log('⏳ Ammo.js not ready yet, retrying in 100ms...');
+        setTimeout(initApp, 100);
     }
-);
+};
+
+// Start the app initialization
+console.log('🚀 Starting app initialization...');
+initApp();
 
 // Find mesh within a GLTF collection group
 function findMeshInCollection(collection) {

@@ -46,11 +46,11 @@
         Loading Ammo.js physics engine...
     </div>
 
+    <!-- Load Ammo.js FIRST (it's the heaviest) -->
+    <script src="ammo.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-
-    <!-- Load ammo.js synchronously -->
-    <script src="ammo.js"></script>
 
     <script>
         // Debug: Check when everything loads
