@@ -99,40 +99,24 @@ loader.load(
         findToyParts(toyGroupRef);
 
         // Initialize physics after GLTF is loaded
-        // Wait for Ammo.js to be available
-        let ammoRetryCount = 0;
-        const maxAmmoRetries = 50; // 5 seconds max
+        // Ammo.js should now be loaded from local file
+        console.log('🔄 Initializing Ammo.js physics...');
 
-        const initAmmoPhysics = () => {
-            ammoRetryCount++;
-            console.log(`🔄 Ammo.js loading attempt ${ammoRetryCount}/${maxAmmoRetries}`);
-
-            if (typeof Ammo === 'function') {
-                console.log('✅ Ammo.js function found, initializing...');
-                Ammo().then((AmmoLib) => {
-                    Ammo = AmmoLib;
-                    console.log('✅ Ammo.js library loaded, calling initPhysics()...');
-                    initPhysics();
-                    console.log('🎮 Ammo.js physics initialized and ready!');
-                }).catch((error) => {
-                    console.error('❌ Failed to initialize Ammo.js:', error);
-                });
-            } else if (typeof Ammo !== 'undefined') {
-                console.log('⚠️  Ammo exists but is not a function:', typeof Ammo, Ammo);
-                // Stop retrying if Ammo exists but isn't a function
-                return;
-            } else {
-                console.log('⏳ Ammo.js not loaded yet, retrying...');
-                if (ammoRetryCount < maxAmmoRetries) {
-                    setTimeout(initAmmoPhysics, 100);
-                } else {
-                    console.error('❌ Ammo.js failed to load after 5 seconds');
-                    console.error('💡 Check: 1) CDN is accessible, 2) No network blocking, 3) Script tag loaded');
-                }
-            }
-        };
-
-        initAmmoPhysics();
+        if (typeof Ammo === 'function') {
+            console.log('✅ Ammo.js function found, initializing...');
+            Ammo().then((AmmoLib) => {
+                Ammo = AmmoLib;
+                console.log('✅ Ammo.js library loaded, calling initPhysics()...');
+                initPhysics();
+                console.log('🎮 Ammo.js physics initialized and ready!');
+                console.log('💡 Try clicking to apply torque and watch the physics simulation!');
+            }).catch((error) => {
+                console.error('❌ Failed to initialize Ammo.js:', error);
+            });
+        } else {
+            console.error('❌ Ammo.js not available as function:', typeof Ammo);
+            console.error('💡 Local ammo.js file may not have loaded correctly');
+        }
 
         console.log('GLTF loaded successfully');
         console.log('Toy hierarchy:', toyGroupRef);
@@ -547,12 +531,10 @@ function onMouseMove(event) {
 
 function onMouseDown(event) {
     try {
-        console.log('🖱️  Mouse down detected');
         mousePressed = true;
 
         // Apply torque to stick, not torso
         if (rigidBodies.stick) {
-            console.log('🔄 Applying torque to stick');
             rigidBodies.stick.activate(true);
 
             const dir = Math.random() > 0.5 ? 1 : -1;
@@ -560,14 +542,10 @@ function onMouseDown(event) {
             rigidBodies.stick.applyTorqueImpulse(
                 new Ammo.btVector3(0, torqueValue, 0)
             );
-            console.log(`✅ Applied torque impulse: ${torqueValue} to stick`);
-        } else {
-            console.log('❌ Stick rigid body not found - physics not initialized?');
-            console.log('Available bodies:', Object.keys(rigidBodies));
+            console.log(`🔄 Applied torque: ${torqueValue.toFixed(1)} to stick`);
         }
     } catch (error) {
         console.error('❌ Mouse down error:', error);
-        console.error('Stack:', error.stack);
     }
 }
 
@@ -625,10 +603,6 @@ function animate(currentTime = 0) {
         // Step physics simulation
         if (physicsWorld) {
             physicsWorld.stepSimulation(delta, 10, 1/60); // Fixed time step for stability
-            // Debug: Log physics step occasionally
-            if (Math.floor(currentTime / 1000) !== Math.floor(lastTime / 1000)) {
-                console.log('⚙️  Physics step executed');
-            }
         }
 
         // Sync physics transforms to Three.js meshes
