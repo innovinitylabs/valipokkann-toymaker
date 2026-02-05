@@ -160,15 +160,15 @@ function loadGLTFAndInitPhysics() {
     );
 }
 
-// Find mesh within a GLTF collection group
-function findMeshInCollection(collection) {
-    let foundMesh = null;
-    collection.traverse((child) => {
-        if (child.isMesh && !foundMesh) {
-            foundMesh = child;
+// Find collection group in GLTF hierarchy
+function findCollectionInGLTF(object, collectionName) {
+    let foundCollection = null;
+    object.traverse((child) => {
+        if (child.name === collectionName && child.type === 'Group' && !foundCollection) {
+            foundCollection = child;
         }
     });
-    return foundMesh;
+    return foundCollection;
 }
 
 // Find toy parts in GLTF hierarchy for physics setup
@@ -191,59 +191,20 @@ function findToyParts(object) {
         objectCount++;
         const displayName = child.name || 'unnamed';
         console.log(`   ${objectCount}. "${displayName}" (${child.type})`);
+    });
 
-        // Check if this is one of our target collections
-        const name = child.name || '';
+    // Find collections - we'll use the groups for physics, not individual meshes
+    const collections = ['body_main', 'left_arm', 'right_arm', 'left_leg', 'right_leg'];
+    const refs = [bodyMainRef, leftArmRef, rightArmRef, leftLegRef, rightLegRef];
 
-        if (name === 'body_main' && child.type === 'Group') {
-            const mesh = findMeshInCollection(child);
-            if (mesh) {
-                bodyMainRef = mesh; // Use the mesh, not the group
-                foundParts.body = true;
-                console.log('✅ FOUND: body_main collection → mesh for torso');
-            } else {
-                console.log('⚠️  FOUND: body_main collection but no mesh inside');
-            }
-
-        } else if (name === 'left_arm' && child.type === 'Group') {
-            const mesh = findMeshInCollection(child);
-            if (mesh) {
-                leftArmRef = mesh;
-                foundParts.leftArm = true;
-                console.log('✅ FOUND: left_arm collection → mesh');
-            } else {
-                console.log('⚠️  FOUND: left_arm collection but no mesh inside');
-            }
-
-        } else if (name === 'right_arm' && child.type === 'Group') {
-            const mesh = findMeshInCollection(child);
-            if (mesh) {
-                rightArmRef = mesh;
-                foundParts.rightArm = true;
-                console.log('✅ FOUND: right_arm collection → mesh');
-            } else {
-                console.log('⚠️  FOUND: right_arm collection but no mesh inside');
-            }
-
-        } else if (name === 'left_leg' && child.type === 'Group') {
-            const mesh = findMeshInCollection(child);
-            if (mesh) {
-                leftLegRef = mesh;
-                foundParts.leftLeg = true;
-                console.log('✅ FOUND: left_leg collection → mesh');
-            } else {
-                console.log('⚠️  FOUND: left_leg collection but no mesh inside');
-            }
-
-        } else if (name === 'right_leg' && child.type === 'Group') {
-            const mesh = findMeshInCollection(child);
-            if (mesh) {
-                rightLegRef = mesh;
-                foundParts.rightLeg = true;
-                console.log('✅ FOUND: right_leg collection → mesh');
-            } else {
-                console.log('⚠️  FOUND: right_leg collection but no mesh inside');
-            }
+    collections.forEach((collectionName, index) => {
+        const collection = findCollectionInGLTF(object, collectionName);
+        if (collection) {
+            refs[index] = collection; // Use the group, not the mesh
+            foundParts[Object.keys(foundParts)[index]] = true;
+            console.log(`✅ FOUND: ${collectionName} collection → using group for physics`);
+        } else {
+            console.log(`❌ MISSING: ${collectionName} collection not found`);
         }
     });
 
@@ -258,7 +219,7 @@ function findToyParts(object) {
     console.log(`\n🎯 AMMO.JS READY: ${foundCount}/5 parts found`);
 
     if (!foundParts.body) {
-        console.error('❌ CRITICAL: body_main collection or mesh not found - physics cannot initialize');
+        console.error('❌ CRITICAL: body_main collection not found - physics cannot initialize');
         console.error('💡 Check that your Blender collections are named exactly: body_main, left_arm, right_arm, left_leg, right_leg');
     }
 }
@@ -322,20 +283,20 @@ function createRigidBodies() {
     console.log('🏗️ Creating rigid bodies...');
 
     // Helper function to create a box shape rigid body
-    function createBoxBody(meshRef, name, mass = 1.0) {
-        if (!meshRef) {
-            console.log(`⚠️ Skipping ${name} - mesh not found`);
+    function createBoxBody(groupRef, name, mass = 1.0) {
+        if (!groupRef) {
+            console.log(`⚠️ Skipping ${name} - group not found`);
             return null;
         }
 
-        // Get world transform from Three.js mesh
+        // Get world transform from Three.js group
         const worldPos = new THREE.Vector3();
         const worldQuat = new THREE.Quaternion();
-        meshRef.getWorldPosition(worldPos);
-        meshRef.getWorldQuaternion(worldQuat);
+        groupRef.getWorldPosition(worldPos);
+        groupRef.getWorldQuaternion(worldQuat);
 
-        // Approximate box shape from mesh bounds
-        const bbox = new THREE.Box3().setFromObject(meshRef);
+        // Approximate box shape from group bounds (includes all meshes)
+        const bbox = new THREE.Box3().setFromObject(groupRef);
         const size = bbox.getSize(new THREE.Vector3());
         const halfExtents = new Ammo.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
 
@@ -468,18 +429,17 @@ function createConstraints() {
 
     physicsWorld.addConstraint(stickTorsoHinge, false);
 
-    // --- FIX 3: CORRECT HINGE PIVOT SPACE ---
     // Create hinges for each limb
     const limbs = [
-        { name: 'leftArm', body: rigidBodies.leftArm, mesh: leftArmRef },
-        { name: 'rightArm', body: rigidBodies.rightArm, mesh: rightArmRef },
-        { name: 'leftLeg', body: rigidBodies.leftLeg, mesh: leftLegRef },
-        { name: 'rightLeg', body: rigidBodies.rightLeg, mesh: rightLegRef }
+        { name: 'leftArm', body: rigidBodies.leftArm, group: leftArmRef },
+        { name: 'rightArm', body: rigidBodies.rightArm, group: rightArmRef },
+        { name: 'leftLeg', body: rigidBodies.leftLeg, group: leftLegRef },
+        { name: 'rightLeg', body: rigidBodies.rightLeg, group: rightLegRef }
     ];
 
-    limbs.forEach(({ name, body, mesh }) => {
-        if (!body || !mesh) {
-            console.log(`⚠️ Skipping constraint for ${name} - body or mesh missing`);
+    limbs.forEach(({ name, body, group }) => {
+        if (!body || !group) {
+            console.log(`⚠️ Skipping constraint for ${name} - body or group missing`);
             return;
         }
 
@@ -492,9 +452,9 @@ function createConstraints() {
         body.getMotionState().getWorldTransform(limbTransform);
         const limbOrigin = limbTransform.getOrigin();
 
-        // Joint position from Blender origin of limb mesh (in world space)
+        // Joint position from Blender origin of limb group (in world space)
         const jointWorld = new THREE.Vector3();
-        mesh.getWorldPosition(jointWorld);
+        group.getWorldPosition(jointWorld);
 
         // Convert world joint → local torso
         const pivotA = new Ammo.btVector3(
@@ -689,12 +649,12 @@ function animate(currentTime = 0) {
     }
 }
 
-// Sync Bullet physics transforms to Three.js meshes
+// Sync Bullet physics transforms to Three.js groups
 function syncPhysicsToMeshes() {
     try {
-        // Helper function to sync a single rigid body
-        function syncBody(body, mesh) {
-            if (!body || !mesh) return;
+        // Helper function to sync a single rigid body to its group
+        function syncBody(body, group, name) {
+            if (!body || !group) return;
 
             // Get transform from physics body
             const transform = new Ammo.btTransform();
@@ -703,17 +663,27 @@ function syncPhysicsToMeshes() {
             const origin = transform.getOrigin();
             const rotation = transform.getRotation();
 
-            // Update Three.js mesh position and quaternion
-            mesh.position.set(origin.x(), origin.y(), origin.z());
-            mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+            // Store original group transform if not already stored
+            if (!group.userData.originalPosition) {
+                group.userData.originalPosition = group.position.clone();
+                group.userData.originalQuaternion = group.quaternion.clone();
+                console.log(`💾 Stored original transform for ${name} group:`, group.userData.originalPosition);
+            }
+
+            // Apply physics transform to the group (world space)
+            group.position.set(origin.x(), origin.y(), origin.z());
+            group.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+
+            // Force update matrix
+            group.updateMatrix();
         }
 
-        // Sync all rigid bodies to their meshes
-        syncBody(rigidBodies.torso, bodyMainRef);
-        syncBody(rigidBodies.leftArm, leftArmRef);
-        syncBody(rigidBodies.rightArm, rightArmRef);
-        syncBody(rigidBodies.leftLeg, leftLegRef);
-        syncBody(rigidBodies.rightLeg, rightLegRef);
+        // Sync all rigid bodies to their groups
+        syncBody(rigidBodies.torso, bodyMainRef, 'torso');
+        syncBody(rigidBodies.leftArm, leftArmRef, 'leftArm');
+        syncBody(rigidBodies.rightArm, rightArmRef, 'rightArm');
+        syncBody(rigidBodies.leftLeg, leftLegRef, 'leftLeg');
+        syncBody(rigidBodies.rightLeg, rightLegRef, 'rightLeg');
 
     } catch (error) {
         console.error('❌ Physics sync error:', error);
