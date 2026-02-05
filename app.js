@@ -865,8 +865,8 @@ function createConstraints() {
             body,
             pivotA,
             pivotB,
-            new AmmoLib.btVector3(0, 1, 0),  // axisA: Y-axis
-            new AmmoLib.btVector3(0, 1, 0),  // axisB: Y-axis
+            new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis (forward axis)
+            new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
             true
         );
 
@@ -997,8 +997,10 @@ function animate(currentTime = 0) {
             console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
         }
 
-        // PURE PHYSICS CONTROL - Let Ammo own all motion
+        // PURE PHYSICS CONTROL - Focus on limb hinges, disable torso spin
         if (AmmoLib && physicsWorld) {
+            // DISABLED: Torso spin motor - focus on limb physics
+            /*
             // Update hinge motors based on mouse input
             if (constraints.spinHinge) {
                 // Smooth interpolation to target position
@@ -1012,6 +1014,7 @@ function animate(currentTime = 0) {
                 // Enable motor with target velocity
                 constraints.spinHinge.enableAngularMotor(true, targetAngle * 2, 10);
             }
+            */
 
             // Step real physics simulation
             try {
