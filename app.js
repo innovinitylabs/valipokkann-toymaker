@@ -508,6 +508,12 @@ let mousePressed = false;
 const TORQUE_IMPULSE = 8.0;   // click applies torque to torso
 const TILT_FORCE = 5.0;       // mouse tilt applies force/torque
 
+// Stick rotation state
+let stickAngularVelocity = 0;
+let stickAngle = 0;
+let stickTiltX = 0;
+let stickTiltZ = 0;
+
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
 const MIN_ZOOM_DISTANCE = 5; // Closest zoom distance
@@ -533,17 +539,10 @@ function onMouseDown(event) {
     try {
         mousePressed = true;
 
-        // Apply torque to stick, not torso
-        if (rigidBodies.stick) {
-            rigidBodies.stick.activate(true);
-
-            const dir = Math.random() > 0.5 ? 1 : -1;
-            const torqueValue = dir * TORQUE_IMPULSE;
-            rigidBodies.stick.applyTorqueImpulse(
-                new Ammo.btVector3(0, torqueValue, 0)
-            );
-            console.log(`🔄 Applied torque: ${torqueValue.toFixed(1)} to stick`);
-        }
+        // Apply angular velocity to kinematic stick (manual integration)
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        stickAngularVelocity += dir * TORQUE_IMPULSE;
+        console.log(`🔄 Added angular velocity to stick: ${dir * TORQUE_IMPULSE}`);
     } catch (error) {
         console.error('❌ Mouse down error:', error);
     }
@@ -573,17 +572,13 @@ function onMouseWheel(event) {
 // Update toy interaction based on mouse position
 function updateToyInteraction() {
     try {
-        // Tilt via stick torque
-        if (rigidBodies.stick) {
-          rigidBodies.stick.activate(true);
+        // Update stick tilt based on mouse position
+        const targetTiltX = mouse.y * 0.5; // Reduced tilt range
+        const targetTiltZ = -mouse.x * 0.5;
 
-          const tx = mouse.y * TILT_FORCE;
-          const tz = -mouse.x * TILT_FORCE;
-
-          rigidBodies.stick.applyTorqueImpulse(
-            new Ammo.btVector3(tx, 0, tz)
-          );
-        }
+        // Smooth tilt interpolation
+        stickTiltX += (targetTiltX - stickTiltX) * delta * 2;
+        stickTiltZ += (targetTiltZ - stickTiltZ) * delta * 2;
     } catch (error) {
         console.error('❌ Toy interaction error:', error);
     }
@@ -599,6 +594,39 @@ function animate(currentTime = 0) {
         // Calculate delta time for physics simulation
         const delta = Math.min((currentTime - lastTime) / 1000, 1/60); // Cap at 60 FPS for physics
         lastTime = currentTime;
+
+        // Update kinematic stick manually
+        if (rigidBodies.stick) {
+            // Manually integrate kinematic stick rotation
+            stickAngle += stickAngularVelocity * delta;
+            stickAngularVelocity *= 0.98; // Damping
+
+            // Create combined rotation (spin + tilt)
+            const spinQuat = new THREE.Quaternion();
+            spinQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), stickAngle);
+
+            const tiltQuatX = new THREE.Quaternion();
+            tiltQuatX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), stickTiltX);
+
+            const tiltQuatZ = new THREE.Quaternion();
+            tiltQuatZ.setFromAxisAngle(new THREE.Vector3(0, 0, 1), stickTiltZ);
+
+            // Combine rotations: spin * tiltX * tiltZ
+            const finalQuat = new THREE.Quaternion();
+            finalQuat.multiplyQuaternions(spinQuat, tiltQuatX);
+            finalQuat.multiply(tiltQuatZ);
+
+            // Set kinematic stick transform directly
+            const stickTransform = new Ammo.btTransform();
+            stickTransform.setIdentity();
+            stickTransform.setOrigin(new Ammo.btVector3(0, 0, 0));
+            stickTransform.setRotation(new Ammo.btQuaternion(finalQuat.x, finalQuat.y, finalQuat.z, finalQuat.w));
+
+            rigidBodies.stick.getMotionState().setWorldTransform(stickTransform);
+
+            // Mark kinematic body as moved
+            rigidBodies.stick.setActivationState(4); // DISABLE_DEACTIVATION
+        }
 
         // Step physics simulation
         if (physicsWorld) {
