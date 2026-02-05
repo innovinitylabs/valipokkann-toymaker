@@ -81,8 +81,8 @@ let bodyMainRef, leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 
 // HARD GATE: Wait for Ammo.js to be available, then initialize
 const waitForAmmo = () => {
-    if (typeof Ammo === 'function') {
-        console.log("🔍 Ammo function found, calling Ammo()...");
+    if (typeof Ammo !== 'undefined') {
+        console.log("🔍 Ammo object found, calling Ammo()...");
         Ammo().then((AmmoInstance) => {
             AmmoLib = AmmoInstance;
             Ammo = AmmoInstance; // global alias for convenience

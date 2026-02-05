@@ -53,8 +53,8 @@
         // Debug: Check if Ammo script executed
         console.log('🔍 After ammo.js script tag - typeof Ammo:', typeof Ammo);
         console.log('🔍 window.Ammo exists:', 'Ammo' in window);
-        if (typeof Ammo === 'function') {
-            console.log('✅ Ammo function available immediately');
+        if (typeof Ammo !== 'undefined') {
+            console.log('✅ Ammo object available immediately');
         } else {
             console.log('⚠️ Ammo not available yet after script tag');
         }
