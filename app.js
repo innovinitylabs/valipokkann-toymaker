@@ -77,9 +77,22 @@ let constraints = {};
 
 // FAIL FAST SAFETY CHECKS
 function validatePhysicsAuthority() {
-    if (rigidBodies.torso && rigidBodies.torso.getInvMass() === 0) {
-        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso mass === 0 - torso must be dynamic!");
+    if (!rigidBodies.torso) {
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso rigid body not created!");
     }
+
+    // Check if it's a valid Ammo.js rigid body by checking for expected methods
+    if (typeof rigidBodies.torso.getMotionState !== 'function') {
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso is not a valid Ammo.js rigid body!");
+    }
+
+    // Check collision flags - should not be kinematic (CF_KINEMATIC_OBJECT = 2)
+    const flags = rigidBodies.torso.getCollisionFlags();
+    if (flags & 2) { // CF_KINEMATIC_OBJECT
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso is kinematic - must be dynamic!");
+    }
+
+    console.log("✅ PHYSICS AUTHORITY VALIDATED: Torso is dynamic");
 }
 
 function safeSetWorldTransform(body, transform) {
@@ -567,6 +580,10 @@ function createRigidBodies() {
 
         // Create rigid body
         rigidBodies.torso = new AmmoLib.btRigidBody(rbInfo);
+
+        if (!rigidBodies.torso) {
+            throw new Error("❌ Failed to create torso rigid body!");
+        }
 
         // Set activation state - no kinematic flags
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
