@@ -161,17 +161,41 @@ function initScene() {
         (gltf) => {
             toyGroupRef = gltf.scene;
 
-            // Enable shadows and count meshes
+            // Enable shadows and analyze mesh structure
             let totalMeshes = 0;
+            const meshNames = new Map();
             toyGroupRef.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
                     totalMeshes++;
+
+                    const name = child.name || 'unnamed';
+                    meshNames.set(name, (meshNames.get(name) || 0) + 1);
                 }
             });
 
             console.log(`🎭 GLTF loaded with ${totalMeshes} total meshes`);
+            console.log('📋 Mesh name counts:', Object.fromEntries(meshNames));
+
+            // Check for potential duplicates
+            const duplicates = Array.from(meshNames.entries()).filter(([name, count]) => count > 1);
+            if (duplicates.length > 0) {
+                console.warn('⚠️ Potential duplicate meshes found:', duplicates);
+                console.warn('💡 This could explain the static + moving mesh issue');
+            }
+
+            // List all meshes with their positions
+            console.log('📍 All mesh positions:');
+            let meshIndex = 0;
+            toyGroupRef.traverse((child) => {
+                if (child.isMesh) {
+                    meshIndex++;
+                    const worldPos = new THREE.Vector3();
+                    child.getWorldPosition(worldPos);
+                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
+                }
+            });
             scene.add(toyGroupRef);
 
             // Find toy parts in the hierarchy
@@ -803,9 +827,14 @@ function syncPhysicsToThree() {
                 return;
             }
 
-            // Sync to the actual mesh to avoid duplicate/hierarchical transform issues
-            bodyMainMesh.position.set(p.x(), p.y(), p.z());
-            bodyMainMesh.quaternion.set(q.x(), q.y(), q.z(), q.w());
+            // Debug: log sync operation
+            const beforePos = new THREE.Vector3();
+            bodyMainRef.getWorldPosition(beforePos);
+            console.log(`🔄 Syncing torso: (${beforePos.x.toFixed(3)}, ${beforePos.y.toFixed(3)}, ${beforePos.z.toFixed(3)}) → (${p.x().toFixed(3)}, ${p.y().toFixed(3)}, ${p.z().toFixed(3)})`);
+
+            // Sync to the group - groups handle hierarchical transforms correctly
+            bodyMainRef.position.set(p.x(), p.y(), p.z());
+            bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
         } else {
             console.warn('⚠️ Torso motion state is null');
         }
