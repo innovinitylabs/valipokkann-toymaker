@@ -71,6 +71,38 @@ scene.add(pointLight);
 // GLTF Loader for r128
 const loader = new THREE.GLTFLoader();
 
+// Helper function to create labeled axes helper
+function createLabeledAxesHelper(size = 1, labelSize = 0.1) {
+    const group = new THREE.Group();
+
+    // Create the basic axes lines
+    const axesHelper = new THREE.AxesHelper(size);
+    group.add(axesHelper);
+
+    // X-axis label (red cube at end of X-axis)
+    const xLabelGeometry = new THREE.BoxGeometry(labelSize, labelSize, labelSize);
+    const xLabelMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const xLabel = new THREE.Mesh(xLabelGeometry, xLabelMaterial);
+    xLabel.position.set(size + labelSize/2, 0, 0);
+    group.add(xLabel);
+
+    // Y-axis label (green cube at end of Y-axis)
+    const yLabelGeometry = new THREE.BoxGeometry(labelSize, labelSize, labelSize);
+    const yLabelMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const yLabel = new THREE.Mesh(yLabelGeometry, yLabelMaterial);
+    yLabel.position.set(0, size + labelSize/2, 0);
+    group.add(yLabel);
+
+    // Z-axis label (blue cube at end of Z-axis)
+    const zLabelGeometry = new THREE.BoxGeometry(labelSize, labelSize, labelSize);
+    const zLabelMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const zLabel = new THREE.Mesh(zLabelGeometry, zLabelMaterial);
+    zLabel.position.set(0, 0, size + labelSize/2);
+    group.add(zLabel);
+
+    return group;
+}
+
 // Ammo.js physics world and rigid bodies
 let AmmoLib = null;
 let physicsWorld;
@@ -268,25 +300,25 @@ function initScene() {
 
             // Add coordinate system gizmos for debugging
             // Global axes helper (shows world XYZ at origin)
-            globalAxesHelper = new THREE.AxesHelper(2); // 2 units long
+            globalAxesHelper = createLabeledAxesHelper(2, 0.15); // 2 units long, 0.15 label size
             globalAxesHelper.position.set(0, 0, 0);
             scene.add(globalAxesHelper);
             console.log('✅ Added global coordinate system gizmo (red=X, green=Y, blue=Z)');
 
             if (bodyMainRef) {
-                torsoAxesHelper = new THREE.AxesHelper(1); // 1 unit long
+                torsoAxesHelper = createLabeledAxesHelper(1, 0.08); // 1 unit long, 0.08 label size
                 bodyMainRef.add(torsoAxesHelper);
                 console.log('✅ Added torso coordinate system gizmo');
             }
 
             if (leftArmPivot) {
-                leftArmAxesHelper = new THREE.AxesHelper(0.5); // 0.5 units long
+                leftArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
                 leftArmPivot.add(leftArmAxesHelper);
                 console.log('✅ Added left arm hinge coordinate system gizmo');
             }
 
             if (rightArmPivot) {
-                rightArmAxesHelper = new THREE.AxesHelper(0.5); // 0.5 units long
+                rightArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
                 rightArmPivot.add(rightArmAxesHelper);
                 console.log('✅ Added right arm hinge coordinate system gizmo');
             }
