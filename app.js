@@ -147,11 +147,8 @@ let leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 let leftHandConstraint, rightHandConstraint, leftLegConstraint, rightLegConstraint;
 let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty (for visual sync)
 
-// Hinge pivot objects - positioned at constraint locations
-let leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot;
-
 // Debug gizmos for coordinate systems
-let globalAxesHelper, torsoAxesHelper, leftArmAxesHelper, rightArmAxesHelper;
+let globalAxesHelper, torsoAxesHelper;
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
 function initializeAmmo() {
@@ -274,28 +271,20 @@ function initScene() {
             // Find toy parts in the hierarchy
             findToyParts(toyGroupRef);
 
-            // 🔧 MANUAL CONTROL: Create hinge pivots at constraint locations
+            // 🔧 PHYSICS CONTROL: Detach limbs to world space for independent physics sync
             if (bodyMainRef) {
-                // Create pivot objects positioned at constraint locations
-                if (leftHandConstraint) {
-                    leftArmPivot = new THREE.Object3D();
-                    leftHandConstraint.getWorldPosition(leftArmPivot.position);
-                    bodyMainRef.attach(leftArmPivot);
-                    if (leftArmRef) leftArmPivot.attach(leftArmRef);
-                    console.log('✅ Created left arm hinge pivot at:', leftArmPivot.position);
-                }
-
-                if (rightHandConstraint) {
-                    rightArmPivot = new THREE.Object3D();
-                    rightHandConstraint.getWorldPosition(rightArmPivot.position);
-                    bodyMainRef.attach(rightArmPivot);
-                    if (rightArmRef) rightArmPivot.attach(rightArmRef);
-                    console.log('✅ Created right arm hinge pivot at:', rightArmPivot.position);
-                }
-
-                // Keep legs in world space for now (they might need different handling)
+                // Detach arms to world space (required for physics sync)
+                if (leftArmRef) scene.attach(leftArmRef);
+                if (rightArmRef) scene.attach(rightArmRef);
                 if (leftLegRef) scene.attach(leftLegRef);
                 if (rightLegRef) scene.attach(rightLegRef);
+
+                console.log('✅ Limbs detached to world space for physics:', {
+                    leftArm: leftArmRef?.parent === scene,
+                    rightArm: rightArmRef?.parent === scene,
+                    leftLeg: leftLegRef?.parent === scene,
+                    rightLeg: rightLegRef?.parent === scene
+                });
             }
 
             // Add coordinate system gizmos for debugging
@@ -311,24 +300,6 @@ function initScene() {
                 console.log('✅ Added torso coordinate system gizmo');
             }
 
-            if (leftArmPivot) {
-                leftArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
-                leftArmPivot.add(leftArmAxesHelper);
-                console.log('✅ Added left arm hinge coordinate system gizmo');
-            }
-
-            if (rightArmPivot) {
-                rightArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
-                rightArmPivot.add(rightArmAxesHelper);
-                console.log('✅ Added right arm hinge coordinate system gizmo');
-            }
-
-            console.log('✅ Hinge pivots created:', {
-                leftArmPivot: !!leftArmPivot,
-                rightArmPivot: !!rightArmPivot,
-                leftLeg: leftLegRef?.parent === scene,
-                rightLeg: rightLegRef?.parent === scene
-            });
 
             // Create physics bodies (only after GLTF loads and bodyMainRef is found)
             if (bodyMainRef && physicsWorld) {
