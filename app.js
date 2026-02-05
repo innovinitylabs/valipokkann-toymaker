@@ -108,34 +108,47 @@ function initializeAmmo() {
 // Start the initialization
 initializeAmmo();
 
-// Initialize physics world
+// Initialize physics world (only creates world, bodies created after GLTF loads)
 function initPhysics() {
-    console.log('🔧 Initializing Ammo.js physics world...');
+    // ASSERT AMMO IS REAL
+    if (!AmmoLib) {
+        throw new Error("AmmoLib not initialized");
+    }
 
-    // Create collision configuration and dispatcher
-    const collisionConfig = new AmmoLib.btDefaultCollisionConfiguration();
-    const dispatcher = new AmmoLib.btCollisionDispatcher(collisionConfig);
+    try {
+        console.log('🔧 Initializing Ammo.js physics world...');
 
-    // Create broadphase
-    const broadphase = new AmmoLib.btDbvtBroadphase();
+        // Create collision configuration and dispatcher
+        const collisionConfig = new AmmoLib.btDefaultCollisionConfiguration();
+        const dispatcher = new AmmoLib.btCollisionDispatcher(collisionConfig);
 
-    // Create constraint solver with >= 10 iterations
-    const solver = new AmmoLib.btSequentialImpulseConstraintSolver();
-    solver.setSolverMode(0); // Use default solver mode
+        // Create broadphase
+        const broadphase = new AmmoLib.btDbvtBroadphase();
 
-    // Create physics world
-    physicsWorld = new AmmoLib.btDiscreteDynamicsWorld(
-        dispatcher,
-        broadphase,
-        solver,
-        collisionConfig
-    );
+        // Create constraint solver with >= 10 iterations
+        const solver = new AmmoLib.btSequentialImpulseConstraintSolver();
+        solver.setSolverMode(0); // Use default solver mode
 
-    // Set gravity (negative Y in Three.js = down)
-    physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
+        // Create physics world
+        physicsWorld = new AmmoLib.btDiscreteDynamicsWorld(
+            dispatcher,
+            broadphase,
+            solver,
+            collisionConfig
+        );
 
-    console.log('✅ Physics world created with gravity:', physicsWorld.getGravity().y());
-    console.log('✅ Solver iterations configured');
+        // Set gravity (negative Y in Three.js = down)
+        physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
+
+        console.log('✅ Physics world created with gravity:', physicsWorld.getGravity().y());
+        console.log('✅ Solver iterations configured');
+        console.log('⏳ Waiting for GLTF to load before creating rigid bodies...');
+
+    } catch (error) {
+        console.error('❌ Error initializing physics world:', error);
+        console.error('Stack:', error.stack);
+        throw error;
+    }
 }
 
 // Load GLTF model and setup scene
@@ -158,11 +171,25 @@ function initScene() {
             // Find toy parts in the hierarchy
             findToyParts(toyGroupRef);
 
-            // Create physics bodies
-            createRigidBodies();
-
-            // Create constraints
-            createConstraints();
+            // Create physics bodies (only after GLTF loads and bodyMainRef is found)
+            if (bodyMainRef && physicsWorld) {
+                createRigidBodies();
+                
+                // Create constraints (only if bodies were created successfully)
+                if (rigidBodies.anchor && rigidBodies.torso) {
+                    createConstraints();
+                    
+                    // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
+                    physicsMeshMap = new Map();
+                    physicsMeshMap.set(bodyMainRef, rigidBodies.torso);
+                    
+                    console.log('🎮 Motor-based jumping jack ready - move mouse to tilt, click to spin!');
+                } else {
+                    console.error('❌ Failed to create physics bodies - cannot create constraints');
+                }
+            } else {
+                console.error('❌ Cannot create physics bodies - bodyMainRef or physicsWorld missing');
+            }
 
             // Hide loading indicator
             const loadingEl = document.getElementById('loading');
@@ -172,7 +199,6 @@ function initScene() {
 
             console.log('GLTF loaded successfully');
             console.log('Toy hierarchy:', toyGroupRef);
-            console.log('🎮 Motor-based jumping jack ready - move mouse to tilt, click to spin!');
         },
         (progress) => {
             console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
@@ -230,69 +256,23 @@ function findToyParts(object) {
 }
 
 // Initialize Ammo.js physics world and create rigid bodies
-function initPhysics() {
-    // ASSERT AMMO IS REAL
-    if (!Ammo) {
-        throw new Error("Ammo.js not initialized");
-    }
-
-    // ADD A PHYSICS SANITY TEST
-    const testShape = new AmmoLib.btBoxShape(
-        new AmmoLib.btVector3(1, 1, 1)
-    );
-    console.log("✅ Bullet sanity test passed", testShape);
-
-    try {
-        console.log('🔧 Initializing Ammo.js physics world...');
-
-        // Create collision configuration and dispatcher
-        const collisionConfig = new AmmoLib.btDefaultCollisionConfiguration();
-        const dispatcher = new AmmoLib.btCollisionDispatcher(collisionConfig);
-
-        // Create broadphase
-        const broadphase = new AmmoLib.btDbvtBroadphase();
-
-        // Create constraint solver
-        const solver = new AmmoLib.btSequentialImpulseConstraintSolver();
-
-        // Create physics world
-        physicsWorld = new AmmoLib.btDiscreteDynamicsWorld(
-            dispatcher,
-            broadphase,
-            solver,
-            collisionConfig
-        );
-
-        // Set gravity (negative Y in Three.js = down)
-        physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
-
-        console.log('✅ Physics world created with gravity:', physicsWorld.getGravity().y());
-
-        // Create rigid bodies for toy parts
-        createRigidBodies();
-
-        // Create hinge constraints
-        createConstraints();
-
-        // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
-        physicsMeshMap = new Map();
-        physicsMeshMap.set(bodyMainRef, rigidBodies.torso);
-
-        console.log('🎮 Ammo.js jumping jack ready - move mouse to tilt, click to apply torque!');
-        console.log('💡 Try clicking to apply torque and watch the physics simulation!');
-
-    } catch (error) {
-        console.error('❌ Error initializing physics:', error);
-        console.error('Stack:', error.stack);
-    }
-}
 
 // Create rigid bodies for anchor and torso (motor-based system)
 function createRigidBodies() {
     console.log('🏗️ Creating motor-based rigid bodies...');
 
+    if (!AmmoLib) {
+        console.error('❌ Cannot create rigid bodies - AmmoLib not loaded');
+        return;
+    }
+
     if (!bodyMainRef) {
         console.error('❌ Cannot create rigid bodies - body_main group not found');
+        return;
+    }
+
+    if (!physicsWorld) {
+        console.error('❌ Cannot create rigid bodies - physicsWorld not initialized');
         return;
     }
 
@@ -384,6 +364,16 @@ function createRigidBodies() {
 function createConstraints() {
     console.log('🔗 Creating motor-based hinge constraint...');
 
+    if (!AmmoLib) {
+        console.error('❌ Cannot create constraints - AmmoLib not loaded');
+        return;
+    }
+
+    if (!physicsWorld) {
+        console.error('❌ Cannot create constraints - physicsWorld not initialized');
+        return;
+    }
+
     if (!rigidBodies.anchor || !rigidBodies.torso) {
         console.error('❌ Cannot create constraints - anchor or torso body missing');
         return;
@@ -450,7 +440,7 @@ let currentZoomDistance = 12; // Current distance from camera to target (matches
 let lastTime = 0;
 
 // Physics ↔ Three.js sync
-const physicsMeshMap = new Map();
+let physicsMeshMap = new Map();
 
 // Toy references are initialized when GLTF loads
 console.log('Motor-based Ammo.js jumping jack initialized');
@@ -470,6 +460,11 @@ function onMouseMove(event) {
 function onMouseDown(event) {
     // STEP 8: CLICK CONTROL - Set motor target speed on spinHinge
     try {
+        if (!constraints.spinHinge) {
+            console.warn('⚠️ Motor not ready yet - constraints not created');
+            return;
+        }
+
         const direction = Math.random() > 0.5 ? 1 : -1; // Random spin direction
         const targetSpeed = direction * MOTOR_TARGET_SPEED;
 
@@ -483,6 +478,10 @@ function onMouseDown(event) {
 function onMouseUp(event) {
     // Stop motor when mouse released
     try {
+        if (!constraints.spinHinge) {
+            return; // Motor not ready yet
+        }
+
         constraints.spinHinge.enableAngularMotor(true, 0, MOTOR_MAX_TORQUE);
         console.log('⏹️ Motor stopped');
     } catch (error) {
@@ -517,6 +516,12 @@ function animate(currentTime = 0) {
         // Calculate delta time for physics simulation
         const delta = Math.min((currentTime - lastTime) / 1000, 1/60); // Cap at 60 FPS for physics
         lastTime = currentTime;
+
+        // Guard: Only run physics if AmmoLib is loaded
+        if (!AmmoLib) {
+            renderer.render(scene, camera);
+            return;
+        }
 
         // STEP 7: CURSOR CONTROL - Update anchor body transform every frame
         if (rigidBodies.anchor) {
@@ -553,6 +558,11 @@ function animate(currentTime = 0) {
 
 // STEP 9: SYNC PHYSICS → THREE (MANDATORY)
 function syncPhysicsToThree() {
+    // Guard: Only sync if AmmoLib is loaded
+    if (!AmmoLib) {
+        return;
+    }
+
     const tmpTrans = new AmmoLib.btTransform();
 
     // Sync torso from physics to Three.js
