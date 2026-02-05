@@ -1029,25 +1029,24 @@ function animate(currentTime = 0) {
 
         // PHYSICS CONTROL - Mouse moves torso to test hinge constraints
         if (AmmoLib && physicsWorld) {
-            // Apply mouse forces to torso for testing hinge physics
+            // Apply mouse torques to tilt torso for testing hinge physics
             if (rigidBodies.torso) {
                 // Smooth interpolation to target position
                 currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 1.5;
                 currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 1.5;
 
-                // Apply gentle forces to torso based on mouse position
-                const forceScale = 8.0; // Moderate force for visible movement
-                const forceX = currentAnchorX * forceScale;
-                const forceZ = currentAnchorZ * forceScale;
+                // Apply torques to tilt torso based on mouse position
+                const torqueScale = 3.0; // Moderate torque for tilting
+                const torqueX = currentAnchorX * torqueScale; // Tilt around X-axis
+                const torqueZ = currentAnchorZ * torqueScale; // Tilt around Z-axis
 
-                // Apply force to torso (at its center)
-                rigidBodies.torso.applyCentralForce(
-                    new AmmoLib.btVector3(forceX, 0, forceZ)
+                // Apply torque to torso (rotational force)
+                rigidBodies.torso.applyTorque(
+                    new AmmoLib.btVector3(torqueX, 0, torqueZ)
                 );
 
-                // Clear velocities occasionally to prevent runaway motion
-                if (Math.random() < 0.01) { // 1% chance each frame
-                    rigidBodies.torso.setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+                // Clear angular velocities occasionally to allow controlled tilting
+                if (Math.random() < 0.02) { // 2% chance each frame
                     rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
                 }
             }
