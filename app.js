@@ -207,8 +207,8 @@ function initPhysics() {
             collisionConfig
         );
 
-        // Set gravity (negative Y in Three.js = down)
-        physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
+        // Set gravity (temporarily disabled for debugging hinge constraints)
+        physicsWorld.setGravity(new AmmoLib.btVector3(0, 0, 0)); // DISABLED GRAVITY
 
         // DEBUG: Check rigid body count
         console.log('🔢 Physics world initialized with gravity:', physicsWorld.getGravity().y());
@@ -808,6 +808,10 @@ function createConstraints() {
 
     console.log('✅ Created anchor ↔ torso hinge constraint');
 
+    // DEBUG: Check total constraints
+    const numConstraints = physicsWorld.getNumConstraints();
+    console.log(`🔗 Constraints after torso hinge: ${numConstraints}`);
+
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
         { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm, joint: leftHandConstraint },
@@ -867,6 +871,12 @@ function createConstraints() {
             jointWorld.z - limbOrigin.z()
         );
 
+        // DEBUG: Check if pivots make sense
+        console.log(`🔧 ${name} hinge setup:`);
+        console.log(`   Joint world: (${jointWorld.x.toFixed(3)}, ${jointWorld.y.toFixed(3)}, ${jointWorld.z.toFixed(3)})`);
+        console.log(`   Pivot A magnitude: ${Math.sqrt(pivotA.x()**2 + pivotA.y()**2 + pivotA.z()**2).toFixed(3)}`);
+        console.log(`   Pivot B magnitude: ${Math.sqrt(pivotB.x()**2 + pivotB.y()**2 + pivotB.z()**2).toFixed(3)}`);
+
         // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
         const hinge = new AmmoLib.btHingeConstraint(
             rigidBodies.torso,
@@ -890,6 +900,10 @@ function createConstraints() {
         console.log(`   Limb origin: (${limbOrigin.x().toFixed(3)}, ${limbOrigin.y().toFixed(3)}, ${limbOrigin.z().toFixed(3)})`);
         console.log(`   Pivot A (torso local): (${pivotA.x().toFixed(3)}, ${pivotA.y().toFixed(3)}, ${pivotA.z().toFixed(3)})`);
         console.log(`   Pivot B (limb local): (${pivotB.x().toFixed(3)}, ${pivotB.y().toFixed(3)}, ${pivotB.z().toFixed(3)})`);
+
+        // DEBUG: Verify constraint was added
+        const numConstraints = physicsWorld.getNumConstraints();
+        console.log(`🔗 Total constraints in physics world: ${numConstraints}`);
     });
 }
 
@@ -1030,6 +1044,23 @@ function animate(currentTime = 0) {
             } catch (e) {
                 console.error('❌ Physics step failed:', e);
                 return;
+            }
+
+            // DEBUG: Check constraint status on first few frames
+            if (frameCount < 5) {
+                frameCount++;
+                console.log(`📊 Frame ${frameCount}: physics stepped, ${physicsWorld.getNumConstraints()} constraints active`);
+
+                // Check if limbs are staying attached
+                const limbs = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+                limbs.forEach(name => {
+                    if (rigidBodies[name]) {
+                        const transform = new AmmoLib.btTransform();
+                        rigidBodies[name].getMotionState().getWorldTransform(transform);
+                        const pos = transform.getOrigin();
+                        console.log(`   ${name}: (${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
+                    }
+                });
             }
 
             // Sync physics transforms to Three.js visuals
