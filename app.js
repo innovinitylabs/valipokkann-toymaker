@@ -125,9 +125,8 @@ function initPhysics() {
         // Create broadphase
         const broadphase = new AmmoLib.btDbvtBroadphase();
 
-        // Create constraint solver with >= 10 iterations
+        // Create constraint solver (iterations configured in stepSimulation)
         const solver = new AmmoLib.btSequentialImpulseConstraintSolver();
-        solver.setSolverMode(0); // Use default solver mode
 
         // Create physics world
         physicsWorld = new AmmoLib.btDiscreteDynamicsWorld(
