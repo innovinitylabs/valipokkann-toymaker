@@ -66,468 +66,851 @@ const pointLight = new THREE.PointLight(0xffffff, 0.5, 20);
 pointLight.position.set(0, 10, 0);
 scene.add(pointLight);
 
+// DEBUG GIZMOS will be added after GLTF loads (variables not available yet)
+
 // GLTF Loader for r128
 const loader = new THREE.GLTFLoader();
 
-// Toy hierarchy references - will be set after GLTF loads
-let toyGroupRef; // Root group of the toy (used for spinning)
-let leftArmRef, rightArmRef; // Arm objects for jumping jack motion
-let leftLegRef, rightLegRef; // Leg objects for jumping jack motion
+// Helper function to create labeled axes helper
+function createLabeledAxesHelper(size = 1, labelSize = 0.1) {
+    const group = new THREE.Group();
 
-// Physics bodies and constraints
-let bodyBody, leftArmBody, rightArmBody, leftLegBody, rightLegBody;
-let leftArmConstraint, rightArmConstraint, leftLegConstraint, rightLegConstraint;
-let physicsWarmupFrames;
+    // Create the basic axes lines
+    const axesHelper = new THREE.AxesHelper(size);
+    group.add(axesHelper);
 
-// Load the GLTF model
-loader.load(
-    'ToyMaker_anim1.glb',
-    (gltf) => {
-        toyGroupRef = gltf.scene;
+    // X-axis label (red cube at end of X-axis)
+    const xLabelGeometry = new THREE.BoxGeometry(labelSize, labelSize, labelSize);
+    const xLabelMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const xLabel = new THREE.Mesh(xLabelGeometry, xLabelMaterial);
+    xLabel.position.set(size + labelSize/2, 0, 0);
+    group.add(xLabel);
 
-        // DO NOT recenter, reposition, or rescale the GLTF scene
-        // Keep the GLTF EXACTLY as authored
+    // Y-axis label (green cube at end of Y-axis)
+    const yLabelGeometry = new THREE.BoxGeometry(labelSize, labelSize, labelSize);
+    const yLabelMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const yLabel = new THREE.Mesh(yLabelGeometry, yLabelMaterial);
+    yLabel.position.set(0, size + labelSize/2, 0);
+    group.add(yLabel);
 
-        // Enable shadows
-        toyGroupRef.traverse((child) => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-            }
-        });
+    // Z-axis label (blue cube at end of Z-axis)
+    const zLabelGeometry = new THREE.BoxGeometry(labelSize, labelSize, labelSize);
+    const zLabelMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const zLabel = new THREE.Mesh(zLabelGeometry, zLabelMaterial);
+    zLabel.position.set(0, 0, size + labelSize/2);
+    group.add(zLabel);
 
-        scene.add(toyGroupRef);
-
-        // Find toy parts in the hierarchy - this will need to be adjusted based on actual GLTF structure
-        findToyParts(toyGroupRef);
-
-        // DO NOT DETACH LIMBS - hierarchy is correct
-        // Limbs must remain children of body_main
-
-        // Set up physics bodies and constraints
-        setupPhysicsBodies();
-
-        console.log('GLTF loaded successfully');
-        console.log('Toy hierarchy:', toyGroupRef);
-    },
-    (progress) => {
-        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-    },
-    (error) => {
-        console.error('Error loading GLTF:', error);
-        console.error('Make sure ToyMaker_anim1.glb is in the same directory as index.html');
-    }
-);
-
-// STEP 1: Analyze GLTF hierarchy and identify physics parts
-function findToyParts(object) {
-    console.log('=== GLTF ANALYSIS START ===');
-    console.log('🔍 Looking for these actual GLTF names: "body_main", "Constraint_left_hand", "Constraint_right_hand", "Constraint_left_leg", "Constraint_right_leg"');
-
-    let objectCount = 0;
-    const meshObjects = [];
-    const foundParts = {
-        body: false,
-        leftArm: false,
-        rightArm: false,
-        leftLeg: false,
-        rightLeg: false
-    };
-
-    // First pass: list ALL objects
-    console.log('📋 ALL OBJECTS IN GLTF:');
-    object.traverse((child) => {
-        objectCount++;
-        const displayName = child.name || 'unnamed';
-        console.log(`   ${objectCount}. "${displayName}" (${child.type})`);
-
-        // Collect all mesh objects for fallback assignment
-        if (child.isMesh) {
-            meshObjects.push(child);
-        }
-    });
-
-    console.log(`\n📊 SUMMARY: ${objectCount} total objects, ${meshObjects.length} meshes`);
-    console.log('🔍 Starting detailed matching...\n');
-
-    // Second pass: detailed matching
-    object.traverse((child) => {
-        const originalName = child.name || '';
-
-        // STEP 2: Check for EXACT matches with expected names
-        if (originalName === 'body_main') {
-            foundParts.body = true;
-            console.log('✅ FOUND: body_main (body)');
-            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
-
-        } else if (originalName === 'left_arm') {
-            leftArmRef = child;
-            foundParts.leftArm = true;
-            console.log('✅ FOUND: left_arm → leftArmRef (ACTUAL MESH GROUP)');
-            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
-
-        } else if (originalName === 'right_arm') {
-            rightArmRef = child;
-            foundParts.rightArm = true;
-            console.log('✅ FOUND: right_arm → rightArmRef (ACTUAL MESH GROUP)');
-            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
-
-        } else if (originalName === 'left_leg') {
-            leftLegRef = child;
-            foundParts.leftLeg = true;
-            console.log('✅ FOUND: left_leg → leftLegRef (ACTUAL MESH GROUP)');
-            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
-
-        } else if (originalName === 'right_leg') {
-            rightLegRef = child;
-            foundParts.rightLeg = true;
-            console.log('✅ FOUND: right_leg → rightLegRef (ACTUAL MESH GROUP)');
-            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
-
-        } else if (originalName === 'Constraint_left_hand' || originalName === 'Constraint_right_hand' ||
-                   originalName === 'Constraint_left_leg' || originalName === 'Constraint_right_leg') {
-            console.log(`⚠️  FOUND CONSTRAINT OBJECT: "${originalName}" - ignoring for physics`);
-            console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
-
-        } else {
-            // Log objects that don't match our expected names but might be relevant
-            if (originalName && (originalName.includes('hand') || originalName.includes('arm') ||
-                originalName.includes('leg') || originalName.includes('body'))) {
-                console.log(`⚠️  POTENTIAL MATCH: "${originalName}" (${child.type}) - not in expected list`);
-                console.log(`   Position: ${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)}`);
-            }
-
-            // Also log all mesh objects to understand the visual structure
-            if (child.isMesh && originalName) {
-                console.log(`🎨 MESH: "${originalName}" at (${child.position.x.toFixed(3)}, ${child.position.y.toFixed(3)}, ${child.position.z.toFixed(3)})`);
-            }
-        }
-    });
-
-    // STEP 3: Final validation and summary
-    console.log('\n📋 FINAL DETECTION RESULTS:');
-    console.log(`   Body: ${foundParts.body ? '✅ FOUND' : '❌ MISSING'} (body_main)`);
-    console.log(`   Left Arm: ${foundParts.leftArm ? '✅ FOUND' : '❌ MISSING'} (Constraint_left_hand)`);
-    console.log(`   Right Arm: ${foundParts.rightArm ? '✅ FOUND' : '❌ MISSING'} (Constraint_right_hand)`);
-    console.log(`   Left Leg: ${foundParts.leftLeg ? '✅ FOUND' : '❌ MISSING'} (Constraint_left_leg)`);
-    console.log(`   Right Leg: ${foundParts.rightLeg ? '✅ FOUND' : '❌ MISSING'} (Constraint_right_leg)`);
-
-    // STEP 4: Determine if we have enough parts for physics
-    const requiredParts = [foundParts.leftArm, foundParts.rightArm, foundParts.leftLeg, foundParts.rightLeg];
-    const foundCount = requiredParts.filter(Boolean).length;
-
-    if (foundCount >= 2) { // At least arms or legs for some physics
-        console.log(`\n🎯 PHYSICS READY: Found ${foundCount}/4 parts - proceeding with physics setup`);
-    } else {
-        console.log(`\n⚠️  PHYSICS LIMITED: Only found ${foundCount}/4 parts - some features disabled`);
-    }
-
+    return group;
 }
 
-// Setup physics bodies and constraints for jumping jack motion
-function setupPhysicsBodies() {
+// Ammo.js physics world and rigid bodies
+let AmmoLib = null;
+let physicsWorld;
+let rigidBodies = {};
+let constraints = {};
+
+// FAIL FAST SAFETY CHECKS
+function validatePhysicsAuthority() {
+    if (!rigidBodies.torso) {
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso rigid body not created!");
+    }
+
+    // Check if it's a valid Ammo.js rigid body by checking for expected methods
+    if (typeof rigidBodies.torso.getMotionState !== 'function') {
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso is not a valid Ammo.js rigid body!");
+    }
+
+    // Check collision flags - should not be kinematic (CF_KINEMATIC_OBJECT = 2)
+    const flags = rigidBodies.torso.getCollisionFlags();
+    if (flags & 2) { // CF_KINEMATIC_OBJECT
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso is kinematic - must be dynamic!");
+    }
+
+    console.log("✅ PHYSICS AUTHORITY VALIDATED: Torso is dynamic");
+}
+
+function safeSetWorldTransform(body, transform) {
+    if (body === rigidBodies.torso) {
+        throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Manual setWorldTransform on torso after constraints created!");
+    }
+    body.getMotionState().setWorldTransform(transform);
+}
+
+console.log("PHYSICS AUTHORITY ACTIVE");
+
+// Toy hierarchy references - will be set after GLTF loads
+let toyGroupRef; // Root group of the toy
+let bodyMainRef;
+let jointEmptyRef; // Blender Empty marking the stick-to-torso joint
+let leftArmRef, rightArmRef, leftLegRef, rightLegRef;
+// Joint constraint objects from Blender
+let leftHandConstraint, rightHandConstraint, leftLegConstraint, rightLegConstraint;
+let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty (for visual sync)
+
+// Hinge pivot objects - positioned at constraint locations
+let leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot;
+
+// Debug gizmos for coordinate systems
+let globalAxesHelper, torsoAxesHelper, leftArmAxesHelper, rightArmAxesHelper;
+
+// STEP 1: Load Ammo.js using CDN and initialize physics
+function initializeAmmo() {
+    console.log('🔍 Starting Ammo.js loading...');
+    console.log('typeof Ammo:', typeof Ammo);
+    console.log('window.Ammo:', !!window.Ammo);
+
+    if (typeof Ammo === 'undefined') {
+        console.error('❌ CRITICAL: Ammo global not found - script failed to load');
+        console.error('💡 Check that ammo_browser.js is loading correctly');
+        return; // This is now inside a function, so it's valid
+    }
+
+    Ammo().then((AmmoLibInstance) => {
+        console.log('✅ Ammo.js loaded successfully');
+        console.log('AmmoLib available:', !!AmmoLibInstance);
+        // Store AmmoLib globally so all functions can access it
+        AmmoLib = AmmoLibInstance;
+        console.log('AmmoLib assigned, btVector3 available:', !!AmmoLib.btVector3);
+        initPhysics();
+        initScene();
+        animate();
+    }).catch((error) => {
+        console.error('❌ Failed to load Ammo.js:', error);
+    });
+}
+
+// Start the initialization
+initializeAmmo();
+
+// Initialize physics world (only creates world, bodies created after GLTF loads)
+function initPhysics() {
+    // ASSERT AMMO IS REAL
+    if (!AmmoLib) {
+        throw new Error("AmmoLib not initialized");
+    }
+
     try {
-        console.log('🔧 Setting up physics bodies...');
+        console.log('🔧 Initializing Ammo.js physics world...');
 
-        // PHYSICAL MODEL: Stick + torso act as ONE KINEMATIC BODY
-        // Arms and legs are DYNAMIC bodies affected by gravity
-        // Connected using HINGE CONSTRAINTS with angular limits
+        // Create collision configuration and dispatcher
+        const collisionConfig = new AmmoLib.btDefaultCollisionConfiguration();
+        const dispatcher = new AmmoLib.btCollisionDispatcher(collisionConfig);
 
-        // STEP 1: DEFINE SINGLE PHYSICS ROOT FRAME
-        // SPLIT BODY INTO TWO PHYSICS BODIES FOR PROPER JUMPING JACK MECHANICS
+        // Create broadphase
+        const broadphase = new AmmoLib.btDbvtBroadphase();
 
-        // Position reference for both bodies
-        const bodyWorldPos = new THREE.Vector3();
-        const bodyWorldQuat = new THREE.Quaternion();
-        toyGroupRef.getWorldPosition(bodyWorldPos);
-        toyGroupRef.getWorldQuaternion(bodyWorldQuat);
+        // Create constraint solver (iterations configured in stepSimulation)
+        const solver = new AmmoLib.btSequentialImpulseConstraintSolver();
 
-        // STEP 1: CREATE STICK DRIVER BODY (KINEMATIC)
-        stickBody = new CANNON.Body({
-            type: CANNON.Body.KINEMATIC, // Directly controlled by mouse
-            mass: 0
-        });
-
-        const stickShape = new CANNON.Box(new CANNON.Vec3(0.05, 1.4, 0.05));
-        stickBody.addShape(stickShape);
-
-        stickBody.position.set(bodyWorldPos.x, bodyWorldPos.y, bodyWorldPos.z);
-        stickBody.quaternion.set(
-            bodyWorldQuat.x,
-            bodyWorldQuat.y,
-            bodyWorldQuat.z,
-            bodyWorldQuat.w
+        // Create physics world
+        physicsWorld = new AmmoLib.btDiscreteDynamicsWorld(
+            dispatcher,
+            broadphase,
+            solver,
+            collisionConfig
         );
 
-        world.addBody(stickBody);
-        console.log('✅ Created kinematic stick driver body');
+        // Set gravity (negative Y in Three.js = down)
+        physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
 
-        // STEP 2: CREATE TORSO BODY (DYNAMIC)
-        torsoBody = new CANNON.Body({
-            mass: 3.0 // HEAVY compared to limbs for inertia
-        });
-
-        // Central torso plank
-        const torsoShape = new CANNON.Box(new CANNON.Vec3(0.35, 1.0, 0.2));
-        torsoBody.addShape(torsoShape, new CANNON.Vec3(0, 0.3, 0));
-
-        // Head / face block
-        const headShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.2));
-        torsoBody.addShape(headShape, new CANNON.Vec3(0, 1.4, 0));
-
-        // Shoulder collision blocker (prevents arms clipping through torso)
-        const shoulderBlocker = new CANNON.Box(new CANNON.Vec3(0.5, 0.3, 0.3));
-        torsoBody.addShape(shoulderBlocker, new CANNON.Vec3(0, 0.9, 0));
-
-        torsoBody.position.set(bodyWorldPos.x, bodyWorldPos.y, bodyWorldPos.z);
-        torsoBody.quaternion.set(
-            bodyWorldQuat.x,
-            bodyWorldQuat.y,
-            bodyWorldQuat.z,
-            bodyWorldQuat.w
-        );
-
-        torsoBody.angularDamping = 0.2; // Mechanical damping
-        world.addBody(torsoBody);
-        console.log('✅ Created dynamic torso body with inertia');
-
-        // STEP 3: CONNECT STICK → TORSO
-        const stickTorsoLock = new CANNON.LockConstraint(stickBody, torsoBody);
-        stickTorsoLock.collideConnected = true; // TEMPORARILY ENABLE collision
-        world.addConstraint(stickTorsoLock);
-        console.log('✅ Connected stick driver to torso body');
-
-        // For backwards compatibility, set bodyBody to torsoBody
-        bodyBody = torsoBody;
-
-        // STEP 2: CREATE LIMB BODIES AT CONSTRAINT MARKER POSITIONS
-        // Use existing bodyWorldPos from kinematic body setup
-
-        // Create dynamic bodies for arms at constraint marker positions
-        const limbWorldPos = new THREE.Vector3();
-        const limbWorldQuat = new THREE.Quaternion();
-
-        if (leftArmRef) {
-            leftArmRef.getWorldPosition(limbWorldPos);
-            leftArmRef.getWorldQuaternion(limbWorldQuat);
-
-            leftArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
-            leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 0.5, 0.05))); // Larger collision shape to prevent visual overlap
-            leftArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
-            leftArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
-
-            // Add damping for mechanical toy feel
-            leftArmBody.angularDamping = 0.4;
-
-            world.addBody(leftArmBody);
-            console.log('✅ Created left arm body at constraint marker position');
-        }
-
-        if (rightArmRef) {
-            rightArmRef.getWorldPosition(limbWorldPos);
-            rightArmRef.getWorldQuaternion(limbWorldQuat);
-
-            rightArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
-            rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 0.5, 0.05))); // Larger collision shape to prevent visual overlap
-            rightArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
-            rightArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
-
-            // Add damping for mechanical toy feel
-            rightArmBody.angularDamping = 0.4;
-
-            world.addBody(rightArmBody);
-            console.log('✅ Created right arm body at constraint marker position');
-        }
-
-        // Create dynamic bodies for legs at constraint marker positions
-        if (leftLegRef) {
-            leftLegRef.getWorldPosition(limbWorldPos);
-            leftLegRef.getWorldQuaternion(limbWorldQuat);
-
-            leftLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
-            leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.06, 0.6, 0.06))); // Larger collision shape to prevent visual overlap
-            leftLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
-            leftLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
-
-            // Add damping for mechanical toy feel
-            leftLegBody.angularDamping = 0.4;
-
-            world.addBody(leftLegBody);
-            console.log('✅ Created left leg body at constraint marker position');
-        }
-
-        if (rightLegRef) {
-            rightLegRef.getWorldPosition(limbWorldPos);
-            rightLegRef.getWorldQuaternion(limbWorldQuat);
-
-            rightLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
-            rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.06, 0.6, 0.06))); // Larger collision shape to prevent visual overlap
-            rightLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
-            rightLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
-
-            // Add damping for mechanical toy feel
-            rightLegBody.angularDamping = 0.4;
-
-            world.addBody(rightLegBody);
-            console.log('✅ Created right leg body at constraint marker position');
-        }
-
-        // STEP 3: COMPUTE HINGE PIVOTS FROM CONSTRAINT MARKERS
-        console.log('🔗 Computing hinge pivots from constraint markers...');
-
-        // Arms: hinge around X-axis for forward/backward swing
-        if (leftArmBody) {
-            // Use the constraint marker as the hinge location
-            const jointWorld = new THREE.Vector3();
-            leftArmRef.getWorldPosition(jointWorld);
-
-            // Convert to TORSO BODY LOCAL coordinates (pivotA)
-            const torsoWorldPos = torsoBody.position;
-            const pivotA = new CANNON.Vec3(
-                jointWorld.x - torsoWorldPos.x,
-                jointWorld.y - torsoWorldPos.y,
-                jointWorld.z - torsoWorldPos.z
-            );
-
-            // Limb local pivot is its origin (pivotB)
-            const pivotB = new CANNON.Vec3(0, 0, 0);
-
-            leftArmConstraint = new CANNON.HingeConstraint(torsoBody, leftArmBody, {
-                pivotA: pivotA,
-                pivotB: pivotB,
-                axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
-                axisB: new CANNON.Vec3(1, 0, 0)
-            });
-            leftArmConstraint.collideConnected = true; // ENABLE collision with torso
-            // Note: Cannon.js HingeConstraint angular limits not available via setLimits
-            // Collision shapes prevent rotation into torso instead
-            world.addConstraint(leftArmConstraint);
-            console.log('✅ Created left arm hinge constraint with collision enabled');
-        }
-
-        if (rightArmBody) {
-            // Use the constraint marker as the hinge location
-            const jointWorld = new THREE.Vector3();
-            rightArmRef.getWorldPosition(jointWorld);
-
-            // Convert to TORSO BODY LOCAL coordinates (pivotA)
-            const torsoWorldPos = torsoBody.position;
-            const pivotA = new CANNON.Vec3(
-                jointWorld.x - torsoWorldPos.x,
-                jointWorld.y - torsoWorldPos.y,
-                jointWorld.z - torsoWorldPos.z
-            );
-
-            // Limb local pivot is its origin (pivotB)
-            const pivotB = new CANNON.Vec3(0, 0, 0);
-
-            rightArmConstraint = new CANNON.HingeConstraint(torsoBody, rightArmBody, {
-                pivotA: pivotA,
-                pivotB: pivotB,
-                axisA: new CANNON.Vec3(1, 0, 0),         // X-axis hinge (left/right axis)
-                axisB: new CANNON.Vec3(1, 0, 0)
-            });
-            rightArmConstraint.collideConnected = true; // ENABLE collision with torso
-            // Note: Cannon.js HingeConstraint angular limits not available via setLimits
-            // Collision shapes prevent rotation into torso instead
-            world.addConstraint(rightArmConstraint);
-            console.log('✅ Created right arm hinge constraint with collision enabled');
-        }
-
-        // Legs: hinge around Z-axis for left/right swing
-        if (leftLegBody) {
-            // Use the constraint marker as the hinge location
-            const jointWorld = new THREE.Vector3();
-            leftLegRef.getWorldPosition(jointWorld);
-
-            // Convert to TORSO BODY LOCAL coordinates (pivotA)
-            const torsoWorldPos = torsoBody.position;
-            const pivotA = new CANNON.Vec3(
-                jointWorld.x - torsoWorldPos.x,
-                jointWorld.y - torsoWorldPos.y,
-                jointWorld.z - torsoWorldPos.z
-            );
-
-            // Limb local pivot is its origin (pivotB)
-            const pivotB = new CANNON.Vec3(0, 0, 0);
-
-            leftLegConstraint = new CANNON.HingeConstraint(torsoBody, leftLegBody, {
-                pivotA: pivotA,
-                pivotB: pivotB,
-                axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
-                axisB: new CANNON.Vec3(0, 0, 1)
-            });
-            leftLegConstraint.collideConnected = true; // ENABLE collision with torso
-            world.addConstraint(leftLegConstraint);
-            console.log('✅ Created left leg hinge constraint with collision enabled');
-        }
-
-        if (rightLegBody) {
-            // Use the constraint marker as the hinge location
-            const jointWorld = new THREE.Vector3();
-            rightLegRef.getWorldPosition(jointWorld);
-
-            // Convert to TORSO BODY LOCAL coordinates (pivotA)
-            const torsoWorldPos = torsoBody.position;
-            const pivotA = new CANNON.Vec3(
-                jointWorld.x - torsoWorldPos.x,
-                jointWorld.y - torsoWorldPos.y,
-                jointWorld.z - torsoWorldPos.z
-            );
-
-            // Limb local pivot is its origin (pivotB)
-            const pivotB = new CANNON.Vec3(0, 0, 0);
-
-            rightLegConstraint = new CANNON.HingeConstraint(torsoBody, rightLegBody, {
-                pivotA: pivotA,
-                pivotB: pivotB,
-                axisA: new CANNON.Vec3(0, 0, 1),         // Z-axis hinge (forward/back axis)
-                axisB: new CANNON.Vec3(0, 0, 1)
-            });
-            rightLegConstraint.collideConnected = true; // ENABLE collision with torso
-            world.addConstraint(rightLegConstraint);
-            console.log('✅ Created right leg hinge constraint with collision enabled');
-        }
-
-        // Hinges alone are now sufficient with proper hierarchy
-
-        // FIX 2: FREEZE PHYSICS FOR 1 FRAME AFTER SETUP
-        physicsWarmupFrames = 2;
-
-        console.log('✅ Physics setup complete - jumping jack with mechanical linkages');
-        console.log('🎮 Physics jumping jack ready - move mouse to tilt, click to spin!');
+        console.log('✅ Physics world created with gravity:', physicsWorld.getGravity().y());
+        console.log('✅ Solver iterations configured');
+        console.log('⏳ Waiting for GLTF to load before creating rigid bodies...');
 
     } catch (error) {
-        console.error('❌ Error setting up physics:', error);
-        console.error('Physics setup failed - no fallback mode available');
+        console.error('❌ Error initializing physics world:', error);
+        console.error('Stack:', error.stack);
+        throw error;
     }
+}
+
+// Load GLTF model and setup scene
+function initScene() {
+    loader.load(
+        'ToyMaker_anim1.glb',
+        (gltf) => {
+            toyGroupRef = gltf.scene;
+
+            // Enable shadows and analyze mesh structure
+            let totalMeshes = 0;
+            const meshNames = new Map();
+            toyGroupRef.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    totalMeshes++;
+
+                    const name = child.name || 'unnamed';
+                    meshNames.set(name, (meshNames.get(name) || 0) + 1);
+                }
+            });
+
+            console.log(`🎭 GLTF loaded with ${totalMeshes} total meshes`);
+            console.log('📋 Mesh name counts:', Object.fromEntries(meshNames));
+
+            // Check for potential duplicates
+            const duplicates = Array.from(meshNames.entries()).filter(([name, count]) => count > 1);
+            if (duplicates.length > 0) {
+                console.warn('⚠️ Potential duplicate meshes found:', duplicates);
+                console.warn('💡 This could explain the static + moving mesh issue');
+            }
+
+            // All meshes are important - don't hide any
+
+            // List all meshes with their positions (all should be visible)
+            console.log('📍 All mesh positions:');
+            let meshIndex = 0;
+            toyGroupRef.traverse((child) => {
+                if (child.isMesh) {
+                    meshIndex++;
+                    const worldPos = new THREE.Vector3();
+                    child.getWorldPosition(worldPos);
+                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
+                }
+            });
+            console.log(`🎭 All ${meshIndex} meshes are visible and important`);
+            scene.add(toyGroupRef);
+
+            // Find toy parts in the hierarchy
+            findToyParts(toyGroupRef);
+
+            // 🔧 MANUAL CONTROL: Create hinge pivots at constraint locations
+            if (bodyMainRef) {
+                // Create pivot objects positioned at constraint locations
+                if (leftHandConstraint) {
+                    leftArmPivot = new THREE.Object3D();
+                    leftHandConstraint.getWorldPosition(leftArmPivot.position);
+                    bodyMainRef.attach(leftArmPivot);
+                    if (leftArmRef) leftArmPivot.attach(leftArmRef);
+                    console.log('✅ Created left arm hinge pivot at:', leftArmPivot.position);
+                }
+
+                if (rightHandConstraint) {
+                    rightArmPivot = new THREE.Object3D();
+                    rightHandConstraint.getWorldPosition(rightArmPivot.position);
+                    bodyMainRef.attach(rightArmPivot);
+                    if (rightArmRef) rightArmPivot.attach(rightArmRef);
+                    console.log('✅ Created right arm hinge pivot at:', rightArmPivot.position);
+                }
+
+                // Keep legs in world space for now (they might need different handling)
+                if (leftLegRef) scene.attach(leftLegRef);
+                if (rightLegRef) scene.attach(rightLegRef);
+            }
+
+            // Add coordinate system gizmos for debugging
+            // Global axes helper (shows world XYZ at origin)
+            globalAxesHelper = createLabeledAxesHelper(2, 0.15); // 2 units long, 0.15 label size
+            globalAxesHelper.position.set(0, 0, 0);
+            scene.add(globalAxesHelper);
+            console.log('✅ Added global coordinate system gizmo (red=X, green=Y, blue=Z)');
+
+            if (bodyMainRef) {
+                torsoAxesHelper = createLabeledAxesHelper(1, 0.08); // 1 unit long, 0.08 label size
+                bodyMainRef.add(torsoAxesHelper);
+                console.log('✅ Added torso coordinate system gizmo');
+            }
+
+            if (leftArmPivot) {
+                leftArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
+                leftArmPivot.add(leftArmAxesHelper);
+                console.log('✅ Added left arm hinge coordinate system gizmo');
+            }
+
+            if (rightArmPivot) {
+                rightArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
+                rightArmPivot.add(rightArmAxesHelper);
+                console.log('✅ Added right arm hinge coordinate system gizmo');
+            }
+
+            console.log('✅ Hinge pivots created:', {
+                leftArmPivot: !!leftArmPivot,
+                rightArmPivot: !!rightArmPivot,
+                leftLeg: leftLegRef?.parent === scene,
+                rightLeg: rightLegRef?.parent === scene
+            });
+
+            // Create physics bodies (only after GLTF loads and bodyMainRef is found)
+            if (bodyMainRef && physicsWorld) {
+                createRigidBodies();
+                
+                // Create constraints (only if bodies were created successfully)
+                if (rigidBodies.anchor && rigidBodies.torso) {
+                    createConstraints();
+                    
+                    // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
+                    physicsMeshMap = new Map();
+                    physicsMeshMap.set(bodyMainRef, rigidBodies.torso);
+                    if (leftArmRef && rigidBodies.leftArm) physicsMeshMap.set(leftArmRef, rigidBodies.leftArm);
+                    if (rightArmRef && rigidBodies.rightArm) physicsMeshMap.set(rightArmRef, rigidBodies.rightArm);
+                    if (leftLegRef && rigidBodies.leftLeg) physicsMeshMap.set(leftLegRef, rigidBodies.leftLeg);
+                    if (rightLegRef && rigidBodies.rightLeg) physicsMeshMap.set(rightLegRef, rigidBodies.rightLeg);
+                    
+                    console.log('🎮 Motor-based jumping jack ready - move mouse to tilt, click to spin!');
+                    console.log(`📊 Physics bodies: ${Object.keys(rigidBodies).filter(k => rigidBodies[k]).length} total`);
+                } else {
+                    console.error('❌ Failed to create physics bodies - cannot create constraints');
+                }
+            } else {
+                console.error('❌ Cannot create physics bodies - bodyMainRef or physicsWorld missing');
+            }
+
+            // Hide loading indicator
+            const loadingEl = document.getElementById('loading');
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
+            }
+
+            console.log('GLTF loaded successfully');
+            console.log('Toy hierarchy:', toyGroupRef);
+        },
+        (progress) => {
+            console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+        },
+        (error) => {
+            console.error('Error loading GLTF:', error);
+            console.error('Make sure ToyMaker_anim1.glb is in the same directory as index.html');
+        }
+    );
+}
+
+// Find collection/object in GLTF hierarchy (Blender collections become regular Objects in GLTF)
+function findCollectionInGLTF(object, collectionName) {
+    let foundCollection = null;
+    object.traverse((child) => {
+        if (child.name === collectionName && !foundCollection) {
+            foundCollection = child;
+        }
+    });
+    return foundCollection;
+}
+
+// Find toy parts in GLTF hierarchy for physics setup
+function findToyParts(object) {
+    console.log('=== GLTF ANALYSIS FOR MOTOR-BASED JUMPING JACK ===');
+    console.log('🔍 Looking for body_main collection for torso physics...');
+
+    // Debug: show ALL objects first
+    console.log('📋 ALL GLTF OBJECTS:');
+    let count = 0;
+    object.traverse((child) => {
+        count++;
+        console.log(`   ${count}. "${child.name}" (${child.type})`);
+    });
+
+    // Only need body_main for now - we'll add limbs later
+    bodyMainRef = findCollectionInGLTF(object, 'body_main') ||
+                  findCollectionInGLTF(object, 'Body') ||
+                  findCollectionInGLTF(object, 'body') ||
+                  findCollectionInGLTF(object, 'torso') ||
+                  findCollectionInGLTF(object, 'Torso');
+
+    if (bodyMainRef) {
+        console.log('✅ FOUND: body object → will use for torso physics');
+        console.log('📍 Torso name:', bodyMainRef.name);
+        console.log('📍 Torso position:', bodyMainRef.position);
+        console.log('📍 Torso rotation:', bodyMainRef.rotation);
+        console.log('📍 Torso type:', bodyMainRef.type);
+        console.log('📍 Torso children:', bodyMainRef.children.length);
+        
+        // Count meshes in torso group (for debugging)
+        let torsoMeshCount = 0;
+        bodyMainRef.traverse((child) => {
+            if (child.isMesh) {
+                torsoMeshCount++;
+            }
+        });
+
+        console.log(`📊 bodyMainRef contains ${torsoMeshCount} meshes`);
+
+        console.log('✅ Using torso group for sync:', bodyMainRef.name);
+    } else {
+        console.error('❌ CRITICAL: body_main collection not found - cannot create torso physics');
+        console.error('💡 Check that your Blender collection is named exactly: body_main');
+
+        // Debug: show all available objects (not just Groups)
+        console.log('🔍 Available objects in GLTF:');
+        object.traverse((child) => {
+            console.log(`   "${child.name}" (${child.type})`);
+        });
+    }
+
+    // STEP 1: IDENTIFY THE JOINT CONSTRAINT (was Empty in Blender)
+    // Search for constraint objects that represent joints
+    const constraintNames = ['Constraint_left_hand', 'Constraint_right_hand',
+                           'Constraint_left_leg', 'Constraint_right_leg'];
+
+    // For torso joint, look for any constraint or use origin
+    jointEmptyRef = null;
+
+    // Try to find a central constraint or use origin as fallback
+    jointEmptyRef = findCollectionInGLTF(object, 'Constraint_left_hand') ||
+                   findCollectionInGLTF(object, 'Constraint_right_hand') ||
+                   findCollectionInGLTF(object, 'Constraint_left_leg') ||
+                   findCollectionInGLTF(object, 'Constraint_right_leg');
+
+    if (!jointEmptyRef) {
+        // Create a virtual joint at origin if no constraints found
+        console.log('⚠️ No constraint objects found, using origin as joint');
+        jointEmptyRef = {
+            name: 'virtual_joint',
+            position: new THREE.Vector3(0, 0, 0),
+            getWorldPosition: (vec) => vec.set(0, 0, 0)
+        };
+    } else {
+        console.log('✅ Using constraint as joint:', jointEmptyRef.name);
+        console.log('📍 Joint position:', jointEmptyRef.position);
+    }
+
+    // Find limbs for future physics setup - try multiple naming patterns
+    const findLimb = (patterns) => {
+        for (const pattern of patterns) {
+            const found = findCollectionInGLTF(object, pattern);
+            if (found) return found;
+        }
+        return null;
+    };
+
+    leftArmRef = findLimb(['left_arm', 'LeftArm', 'leftArm', 'L_Arm', 'LArm']);
+    rightArmRef = findLimb(['right_arm', 'RightArm', 'rightArm', 'R_Arm', 'RArm']);
+    leftLegRef = findLimb(['left_leg', 'LeftLeg', 'leftLeg', 'L_Leg', 'LLeg']);
+    rightLegRef = findLimb(['right_leg', 'RightLeg', 'rightLeg', 'R_Leg', 'RLeg']);
+
+    // Find constraint objects for joint positions
+    leftHandConstraint = findCollectionInGLTF(object, 'Constraint_left_hand');
+    rightHandConstraint = findCollectionInGLTF(object, 'Constraint_right_hand');
+    leftLegConstraint = findCollectionInGLTF(object, 'Constraint_left_leg');
+    rightLegConstraint = findCollectionInGLTF(object, 'Constraint_right_leg');
+
+    console.log('📋 Limbs found:', {
+        leftArm: !!leftArmRef,
+        rightArm: !!rightArmRef,
+        leftLeg: !!leftLegRef,
+        rightLeg: !!rightLegRef
+    });
+
+    console.log('🔗 Joint constraints found:', {
+        leftHand: !!leftHandConstraint,
+        rightHand: !!rightHandConstraint,
+        leftLeg: !!leftLegConstraint,
+        rightLeg: !!rightLegConstraint
+    });
+
+    // Debug: Show positions of constraints vs limbs vs torso
+    if (bodyMainRef) {
+        const torsoPos = new THREE.Vector3();
+        bodyMainRef.getWorldPosition(torsoPos);
+        console.log(`📍 Torso position: (${torsoPos.x.toFixed(3)}, ${torsoPos.y.toFixed(3)}, ${torsoPos.z.toFixed(3)})`);
+    }
+
+    const constraints = [
+        { name: 'leftHand', obj: leftHandConstraint },
+        { name: 'rightHand', obj: rightHandConstraint },
+        { name: 'leftLeg', obj: leftLegConstraint },
+        { name: 'rightLeg', obj: rightLegConstraint }
+    ];
+
+    constraints.forEach(({ name, obj }) => {
+        if (obj) {
+            const pos = new THREE.Vector3();
+            obj.getWorldPosition(pos);
+            console.log(`📍 ${name} constraint: (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})`);
+        }
+    });
+
+    const limbs = [
+        { name: 'leftArm', obj: leftArmRef },
+        { name: 'rightArm', obj: rightArmRef },
+        { name: 'leftLeg', obj: leftLegRef },
+        { name: 'rightLeg', obj: rightLegRef }
+    ];
+
+    limbs.forEach(({ name, obj }) => {
+        if (obj) {
+            const pos = new THREE.Vector3();
+            obj.getWorldPosition(pos);
+            console.log(`📍 ${name} limb: (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})`);
+        }
+    });
+
+    // Show which names were found
+    const limbRefs = { leftArmRef, rightArmRef, leftLegRef, rightLegRef };
+    Object.entries(limbRefs).forEach(([key, ref]) => {
+        if (ref) {
+            console.log(`✅ ${key}: "${ref.name}"`);
+        }
+    });
+
+    // Debug limb structure
+    [leftArmRef, rightArmRef, leftLegRef, rightLegRef].forEach((ref, index) => {
+        if (ref) {
+            const names = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+            let meshCount = 0;
+            ref.traverse((child) => {
+                if (child.isMesh) meshCount++;
+            });
+            console.log(`📊 ${names[index]} contains ${meshCount} meshes`);
+        }
+    });
+}
+
+// Initialize Ammo.js physics world and create rigid bodies
+
+// Create rigid bodies for anchor and torso (motor-based system)
+function createRigidBodies() {
+    console.log('🏗️ Creating motor-based rigid bodies...');
+
+    if (!AmmoLib) {
+        console.error('❌ Cannot create rigid bodies - AmmoLib not loaded');
+        return;
+    }
+
+    if (!bodyMainRef) {
+        console.error('❌ Cannot create rigid bodies - body_main group not found');
+        return;
+    }
+
+    if (!physicsWorld) {
+        console.error('❌ Cannot create rigid bodies - physicsWorld not initialized');
+        return;
+    }
+
+    if (!jointEmptyRef) {
+        console.error('❌ Cannot create rigid bodies - joint Empty not found');
+        return;
+    }
+
+    console.log('✅ bodyMainRef confirmed, proceeding with physics creation...');
+
+    // STEP 2: CREATE STATIC ANCHOR BODY (follows cursor) - ALIGNED TO JOINT EMPTY
+    {
+        // Use btSphereShape for simple anchor
+        const anchorShape = new AmmoLib.btSphereShape(0.1); // Small sphere
+
+        // Align anchor to Empty position initially
+        const jointWorldPos = new THREE.Vector3();
+        jointEmptyRef.getWorldPosition(jointWorldPos);
+
+        const anchorTransform = new AmmoLib.btTransform();
+        anchorTransform.setIdentity();
+        anchorTransform.setOrigin(
+            new AmmoLib.btVector3(
+                jointWorldPos.x,
+                jointWorldPos.y,
+                jointWorldPos.z
+            )
+        );
+
+        const anchorMotionState = new AmmoLib.btDefaultMotionState(anchorTransform);
+
+        // mass = 0 for static body
+        const anchorInfo = new AmmoLib.btRigidBodyConstructionInfo(
+            0, // mass = 0 (static)
+            anchorMotionState,
+            anchorShape,
+            new AmmoLib.btVector3(0, 0, 0) // zero inertia for static
+        );
+
+        rigidBodies.anchor = new AmmoLib.btRigidBody(anchorInfo);
+        rigidBodies.anchor.setCollisionFlags(
+            rigidBodies.anchor.getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
+        );
+        rigidBodies.anchor.setActivationState(4); // DISABLE_DEACTIVATION
+
+        physicsWorld.addRigidBody(rigidBodies.anchor);
+        console.log('✅ Created static anchor body (kinematic, follows cursor)');
+    }
+
+    // STEP 4: CREATE DYNAMIC TORSO BODY
+    {
+        // Get world transform from Three.js group
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        bodyMainRef.getWorldPosition(worldPos);
+        bodyMainRef.getWorldQuaternion(worldQuat);
+
+        // Approximate box shape from group bounds
+        const bbox = new THREE.Box3().setFromObject(bodyMainRef);
+        const size = bbox.getSize(new THREE.Vector3());
+
+        // Debug: Validate torso size
+        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z) ||
+            size.x <= 0 || size.y <= 0 || size.z <= 0) {
+            console.error('❌ Invalid torso bounding box size:', size.x, size.y, size.z);
+            return;
+        }
+
+        const halfExtents = new AmmoLib.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
+
+        // Create box shape
+        const torsoShape = new AmmoLib.btBoxShape(halfExtents);
+
+        // Calculate local inertia (mass = 2.0)
+        const mass = 2.0; // Dynamic torso
+        const localInertia = new AmmoLib.btVector3(0, 0, 0);
+        torsoShape.calculateLocalInertia(mass, localInertia);
+
+        // Create motion state at the GLTF position - physics body starts where mesh is
+        const transform = new AmmoLib.btTransform();
+        transform.setIdentity();
+        transform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+        transform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
+
+        const motionState = new AmmoLib.btDefaultMotionState(transform);
+
+        // Create rigid body info
+        const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(mass, motionState, torsoShape, localInertia);
+
+        // Create rigid body
+        rigidBodies.torso = new AmmoLib.btRigidBody(rbInfo);
+
+        if (!rigidBodies.torso) {
+            throw new Error("❌ Failed to create torso rigid body!");
+        }
+
+        // Set activation state - no kinematic flags
+        rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
+
+        // Add to physics world
+        physicsWorld.addRigidBody(rigidBodies.torso);
+
+        // FAIL FAST: Validate physics authority
+        validatePhysicsAuthority();
+
+        console.log(`✅ DYNAMIC TORSO CREATED (mass: ${mass}, size: ${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)})`);
+    }
+
+    // Create limbs (arms and legs)
+    const limbs = [
+        { name: 'leftArm', ref: leftArmRef, mass: 0.5 },
+        { name: 'rightArm', ref: rightArmRef, mass: 0.5 },
+        { name: 'leftLeg', ref: leftLegRef, mass: 0.7 },
+        { name: 'rightLeg', ref: rightLegRef, mass: 0.7 }
+    ];
+
+    limbs.forEach(({ name, ref, mass }) => {
+        if (!ref) {
+            console.log(`⚠️ Skipping ${name} - reference not found`);
+            return;
+        }
+
+        // Get world transform
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        ref.getWorldPosition(worldPos);
+        ref.getWorldQuaternion(worldQuat);
+
+        // Approximate box shape from bounds
+        const bbox = new THREE.Box3().setFromObject(ref);
+        const size = bbox.getSize(new THREE.Vector3());
+
+        // Debug: Validate size
+        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z) ||
+            size.x <= 0 || size.y <= 0 || size.z <= 0) {
+            console.error('❌ Invalid bounding box size for', name, ':', size.x, size.y, size.z);
+            return;
+        }
+
+        const halfExtents = new AmmoLib.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
+
+        const shape = new AmmoLib.btBoxShape(halfExtents);
+
+        // Calculate local inertia
+        const localInertia = new AmmoLib.btVector3(0, 0, 0);
+        shape.calculateLocalInertia(mass, localInertia);
+
+        // Create initial transform
+        const initialTransform = new AmmoLib.btTransform();
+        initialTransform.setIdentity();
+        initialTransform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+        initialTransform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
+
+        // Create motion state with initial transform
+        const motionState = new AmmoLib.btDefaultMotionState(initialTransform);
+        const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+
+        rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
+        rigidBodies[name].setDamping(0.1, 0.2);
+        rigidBodies[name].setActivationState(4);
+        rigidBodies[name].setSleepingThresholds(0, 0);
+
+        physicsWorld.addRigidBody(rigidBodies[name]);
+        console.log(`✅ Created ${name} body (mass: ${mass}) at (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
+    });
+
+    console.log('📊 Rigid bodies summary:', {
+        anchor: !!rigidBodies.anchor,
+        torso: !!rigidBodies.torso,
+        leftArm: !!rigidBodies.leftArm,
+        rightArm: !!rigidBodies.rightArm,
+        leftLeg: !!rigidBodies.leftLeg,
+        rightLeg: !!rigidBodies.rightLeg
+    });
+}
+
+// Create hinge constraint with motor between anchor and torso
+function createConstraints() {
+    console.log('🔗 Creating motor-based hinge constraint...');
+
+    if (!AmmoLib) {
+        console.error('❌ Cannot create constraints - AmmoLib not loaded');
+        return;
+    }
+
+    if (!physicsWorld) {
+        console.error('❌ Cannot create constraints - physicsWorld not initialized');
+        return;
+    }
+
+    if (!rigidBodies.anchor || !rigidBodies.torso) {
+        console.error('❌ Cannot create constraints - anchor or torso body missing');
+        return;
+    }
+
+    if (!jointEmptyRef) {
+        console.error('❌ Cannot create constraints - joint Empty not found');
+        return;
+    }
+
+    if (!bodyMainRef) {
+        console.error('❌ Cannot create constraints - bodyMainRef not found');
+        return;
+    }
+
+    // STEP 5: ANCHOR ↔ TORSO HINGE
+    // pivotA = (0,0,0) in anchor local space
+    // pivotB = jointWorld − torsoWorldOrigin
+    // axis = Y axis
+
+    // Compute jointWorld from Blender Empty
+    const jointWorld = new THREE.Vector3();
+    jointEmptyRef.getWorldPosition(jointWorld);
+
+    // Get torso physics body world position
+    const torsoTransform = new AmmoLib.btTransform();
+    rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
+    const torsoOrigin = torsoTransform.getOrigin();
+
+    // Compute pivotB = jointWorld − torsoWorldOrigin
+    const pivotB = new AmmoLib.btVector3(
+        jointWorld.x - torsoOrigin.x(),
+        jointWorld.y - torsoOrigin.y(),
+        jointWorld.z - torsoOrigin.z()
+    );
+
+    // Create hinge constraint between anchor and torso
+    constraints.spinHinge = new AmmoLib.btHingeConstraint(
+        rigidBodies.anchor,
+        rigidBodies.torso,
+        new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin
+        pivotB,                             // pivotB: torso local pivot
+        new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
+        new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
+        true                                // useReferenceFrameA
+    );
+
+    // Add constraint to physics world
+    physicsWorld.addConstraint(constraints.spinHinge, false);
+
+    console.log('✅ Created anchor ↔ torso hinge constraint');
+
+    // Create limb constraints using constraint objects as joint positions
+    const limbConstraints = [
+        { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm, joint: leftHandConstraint },
+        { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm, joint: rightHandConstraint },
+        { name: 'leftLeg', ref: leftLegRef, body: rigidBodies.leftLeg, joint: leftLegConstraint },
+        { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg, joint: rightLegConstraint }
+    ];
+
+    limbConstraints.forEach(({ name, ref, body, joint }) => {
+        if (!body || !ref) {
+            console.log(`⚠️ Skipping constraint for ${name} - body or reference missing`);
+            return;
+        }
+
+        // Count meshes in limb group (for debugging)
+        let limbMeshCount = 0;
+        ref.traverse((child) => {
+            if (child.isMesh) {
+                limbMeshCount++;
+            }
+        });
+        console.log(`📊 ${name} contains ${limbMeshCount} meshes`);
+
+        // Get joint position from constraint object (or fallback to limb position)
+        const jointWorld = new THREE.Vector3();
+        if (joint) {
+            joint.getWorldPosition(jointWorld);
+            console.log(`🔗 ${name} using constraint joint: ${joint.name}`);
+        } else {
+            // Fallback: use limb origin as joint
+            ref.getWorldPosition(jointWorld);
+            console.log(`⚠️ ${name} using fallback joint (limb origin)`);
+        }
+
+        // Get torso physics body world position
+        const torsoTransform = new AmmoLib.btTransform();
+        rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
+        const torsoOrigin = torsoTransform.getOrigin();
+
+        // Get limb physics body world position
+        const limbTransform = new AmmoLib.btTransform();
+        body.getMotionState().getWorldTransform(limbTransform);
+        const limbOrigin = limbTransform.getOrigin();
+
+        // Compute pivots using hinge pattern:
+        // pivotA = jointWorld − torsoWorldOrigin
+        // pivotB = jointWorld − limbWorldOrigin
+        const pivotA = new AmmoLib.btVector3(
+            jointWorld.x - torsoOrigin.x(),
+            jointWorld.y - torsoOrigin.y(),
+            jointWorld.z - torsoOrigin.z()
+        );
+
+        const pivotB = new AmmoLib.btVector3(
+            jointWorld.x - limbOrigin.x(),
+            jointWorld.y - limbOrigin.y(),
+            jointWorld.z - limbOrigin.z()
+        );
+
+        // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
+        const hinge = new AmmoLib.btHingeConstraint(
+            rigidBodies.torso,
+            body,
+            pivotA,
+            pivotB,
+            new AmmoLib.btVector3(0, 1, 0),  // axisA: Y-axis
+            new AmmoLib.btVector3(0, 1, 0),  // axisB: Y-axis
+            true
+        );
+
+        // Add to physics world (disable collisions between connected bodies)
+        physicsWorld.addConstraint(hinge, false);
+
+        // Store constraint
+        constraints[name] = hinge;
+
+        console.log(`✅ Created hinge constraint: ${name}`);
+        console.log(`   Joint: (${jointWorld.x.toFixed(3)}, ${jointWorld.y.toFixed(3)}, ${jointWorld.z.toFixed(3)})`);
+        console.log(`   Torso origin: (${torsoOrigin.x().toFixed(3)}, ${torsoOrigin.y().toFixed(3)}, ${torsoOrigin.z().toFixed(3)})`);
+        console.log(`   Limb origin: (${limbOrigin.x().toFixed(3)}, ${limbOrigin.y().toFixed(3)}, ${limbOrigin.z().toFixed(3)})`);
+        console.log(`   Pivot A (torso local): (${pivotA.x().toFixed(3)}, ${pivotA.y().toFixed(3)}, ${pivotA.z().toFixed(3)})`);
+        console.log(`   Pivot B (limb local): (${pivotB.x().toFixed(3)}, ${pivotB.y().toFixed(3)}, ${pivotB.z().toFixed(3)})`);
+    });
 }
 
 // Mouse interaction variables
 const mouse = new THREE.Vector2();
-let mousePressed = false;
 
-// glTF runtime is Y-up. This is the ONLY vertical axis.
-const VERTICAL_AXIS = new CANNON.Vec3(0, 1, 0);
+// Cursor control - anchor follows mouse
+let targetAnchorX = 0;
+let targetAnchorZ = 0;
+let currentAnchorX = 0;
+let currentAnchorZ = 0;
 
-// Toy tilt variables - mouse controls kinematic body tilting
-const maxToyTiltX = Math.PI / 6; // ±30 degrees X tilt (front/back)
-const maxToyTiltY = Math.PI / 8; // ±22.5 degrees Y tilt (left/right)
-
-// Persistent rotation quaternions (glTF Y-up space)
-let spinQuaternion = new CANNON.Quaternion(0, 0, 0, 1); // Identity quaternion for accumulated spin around vertical axis
-let tiltQuaternion = new CANNON.Quaternion(0, 0, 0, 1); // Identity quaternion for tilt
-
-// Physics world setup
-const world = new CANNON.World();
-world.gravity.set(0, -4.0, 0); // Reduced gravity for mechanical toy physics
-world.broadphase = new CANNON.SAPBroadphase(world);
-world.defaultContactMaterial.friction = 0.4;
-world.defaultContactMaterial.restitution = 0.3;
-
-// Strengthen solver for rigid mechanical joints
-world.solver.iterations = 40;
-world.solver.tolerance = 0.001;
+// Motor control
+const MOTOR_TARGET_SPEED = 8.0; // Speed when clicking
+const MOTOR_MAX_TORQUE = 15.0;  // Torque limit
 
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
@@ -535,8 +918,16 @@ const MIN_ZOOM_DISTANCE = 5; // Closest zoom distance
 const MAX_ZOOM_DISTANCE = 25; // Farthest zoom distance
 let currentZoomDistance = 12; // Current distance from camera to target (matches initial position)
 
+// Animation timing
+let lastTime = 0;
+let frameCount = 0;
+let syncCount = 0;
+
+// Physics ↔ Three.js sync
+let physicsMeshMap = new Map();
+
 // Toy references are initialized when GLTF loads
-console.log('Three.js jumping jack toy initialized');
+console.log('Motor-based Ammo.js jumping jack initialized');
 
 // Mouse event handlers
 function onMouseMove(event) {
@@ -544,42 +935,42 @@ function onMouseMove(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    updateToyInteraction();
+    // STEP 7: CURSOR CONTROL - Update anchor position targets
+    // Convert screen position to world offset
+    targetAnchorX = mouse.x * 2.0; // Scale for reasonable movement range
+    targetAnchorZ = mouse.y * 2.0;
 }
 
 function onMouseDown(event) {
-    try {
-        mousePressed = true;
+    // STEP 8: CLICK CONTROL - DISABLED for debugging pendulum physics
+    // try {
+    //     if (!constraints.spinHinge) {
+    //         console.warn('⚠️ Motor not ready yet - constraints not created');
+    //         return;
+    //     }
 
-        // CLICK BEHAVIOR: Spin the STICK DRIVER around its local vertical axis
-        if (stickBody) {
-            const randomAngle = (Math.random() - 0.5) * Math.PI * 4; // Random angle between -2π and +2π
+    //     const direction = Math.random() > 0.5 ? 1 : -1; // Random spin direction
+    //     const targetSpeed = direction * MOTOR_TARGET_SPEED;
 
-            // Step 1: get stick's current orientation
-            const q = stickBody.quaternion;
-
-            // Step 2: compute local vertical axis in world space
-            const worldSpinAxis = q.vmult(VERTICAL_AXIS);
-
-            // Step 3: create spin quaternion around THAT axis
-            const spinQuat = new CANNON.Quaternion();
-            spinQuat.setFromAxisAngle(worldSpinAxis, randomAngle);
-
-            // Step 4: apply spin WITHOUT destroying tilt
-            spinQuaternion = spinQuat.mult(spinQuaternion);
-
-            // Step 5: final orientation = spin × tilt (applied to stick)
-            stickBody.quaternion = spinQuaternion.mult(tiltQuaternion);
-
-            console.log('🎪 Spin applied to stick driver!');
-        }
-    } catch (error) {
-        console.error('❌ Mouse down error:', error);
-    }
+    //     constraints.spinHinge.enableAngularMotor(true, targetSpeed, MOTOR_MAX_TORQUE);
+    //     console.log(`🔄 Motor activated: target speed ${targetSpeed}, max torque ${MOTOR_MAX_TORQUE}`);
+    // } catch (error) {
+    //     console.error('❌ Motor control error:', error);
+    // }
 }
 
 function onMouseUp(event) {
-    mousePressed = false;
+    // Stop motor when mouse released - DISABLED for debugging
+    // try {
+    //     if (!constraints.spinHinge) {
+    //         return; // Motor not ready yet
+    //     }
+
+    //     constraints.spinHinge.enableAngularMotor(true, 0, MOTOR_MAX_TORQUE);
+    //     console.log('⏹️ Motor stopped');
+    // } catch (error) {
+    //     console.error('❌ Motor stop error:', error);
+    // }
 }
 
 function onMouseWheel(event) {
@@ -599,227 +990,72 @@ function onMouseWheel(event) {
     camera.lookAt(0, 0, 0);
 }
 
-// Update toy interaction based on mouse position
-function updateToyInteraction() {
-    try {
-        // MOUSE TILT: Respect Blender local space axes
-        if (bodyBody) {
-            // Mouse X: left/right tilt → rotate around Blender Y axis (0, 1, 0)
-            const leftRightAngle = mouse.x * maxToyTiltY;
-
-            // Mouse Y: front/back tilt → rotate around Blender X axis (1, 0, 0)
-            const frontBackAngle = mouse.y * maxToyTiltX;
-
-            // Create tilt quaternions
-            const yRotation = new CANNON.Quaternion(); // Left/right tilt around Y-axis
-            yRotation.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), leftRightAngle);
-
-            const xRotation = new CANNON.Quaternion(); // Front/back tilt around X-axis
-            xRotation.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), frontBackAngle);
-
-            // Combine tilt rotations: tiltQuaternion = yRotation × xRotation
-            tiltQuaternion = yRotation.mult(xRotation);
-
-            // DRIVE STICK BODY WITH SMOOTH INTERPOLATION (torso follows via constraint)
-            const targetQuat = spinQuaternion.mult(tiltQuaternion);
-
-            // Linear quaternion interpolation for Cannon.js (no built-in slerp)
-            const slerpFactor = 0.15;
-            stickBody.quaternion.x = stickBody.quaternion.x * (1 - slerpFactor) + targetQuat.x * slerpFactor;
-            stickBody.quaternion.y = stickBody.quaternion.y * (1 - slerpFactor) + targetQuat.y * slerpFactor;
-            stickBody.quaternion.z = stickBody.quaternion.z * (1 - slerpFactor) + targetQuat.z * slerpFactor;
-            stickBody.quaternion.w = stickBody.quaternion.w * (1 - slerpFactor) + targetQuat.w * slerpFactor;
-
-            // Normalize to prevent drift
-            const len = Math.sqrt(stickBody.quaternion.x**2 + stickBody.quaternion.y**2 + stickBody.quaternion.z**2 + stickBody.quaternion.w**2);
-            if (len > 0) {
-                stickBody.quaternion.x /= len;
-                stickBody.quaternion.y /= len;
-                stickBody.quaternion.z /= len;
-                stickBody.quaternion.w /= len;
-            }
-        }
-    } catch (error) {
-        console.error('❌ Toy interaction error:', error);
-    }
-}
-
 // Mouse interaction drives kinematic body directly - no animation timers needed
 
-// Animation loop
-function animate() {
+// Animation loop with motor-based Ammo.js physics simulation
+function animate(currentTime = 0) {
     try {
         requestAnimationFrame(animate);
 
-        // Update physics simulation - kinematic driver controls dynamic limbs
-        if (world && bodyBody) {
-            // FIX 2: FREEZE PHYSICS FOR WARMUP FRAMES
-            if (physicsWarmupFrames > 0) {
-                physicsWarmupFrames--;
-                world.step(1/60, 0, 0); // no forces, no catch-up - let constraints settle
-            } else {
-                world.step(1/60); // 60 FPS physics
+        // Initialize lastTime on first frame
+        if (lastTime === 0) {
+            lastTime = currentTime;
+        }
+
+        // Calculate delta time for physics simulation
+        const delta = Math.min((currentTime - lastTime) / 1000, 1/60); // Cap at 60 FPS for physics
+        lastTime = currentTime;
+
+        // Debug: Log large delta values that might cause instability
+        if (delta > 0.1) {
+            console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
+        }
+
+        // MANUAL HINGE CONTROL - Direct arm rotation in torso's local XY plane
+        if (bodyMainRef) {
+            // Smooth interpolation to target position
+            currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 2;
+            currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 2;
+
+            // Convert mouse position to hinge angles (in radians)
+            const maxArmAngle = Math.PI / 2; // 90 degrees max arm swing
+            const maxLegAngle = Math.PI / 4; // 45 degrees max leg swing
+
+            // Arms swing in torso's local XY plane (around X-axis for up-down swing)
+            const leftArmAngle = currentAnchorX * maxArmAngle;   // X mouse controls left arm
+            const rightArmAngle = currentAnchorX * maxArmAngle;  // X mouse controls right arm (same direction for jumping jack)
+            const armVerticalAngle = currentAnchorZ * maxArmAngle; // Y mouse controls vertical swing
+
+            // Legs swing in world space for now
+            const legSwingAngle = currentAnchorZ * maxLegAngle;
+
+            // Apply hinge rotation to pivot objects (limbs swing around Z-axis/blue axis)
+            if (leftArmPivot) {
+                leftArmPivot.rotation.x = 0; // Reset other axes
+                leftArmPivot.rotation.y = 0;
+                leftArmPivot.rotation.z = leftArmAngle; // Z-axis hinge
+            }
+            if (rightArmPivot) {
+                rightArmPivot.rotation.x = 0; // Reset other axes
+                rightArmPivot.rotation.y = 0;
+                rightArmPivot.rotation.z = rightArmAngle; // Z-axis hinge
             }
 
-            // SYNC RULE: Each animation frame copy Cannon body position + quaternion → matching Three.js object
-            // Do NOT modify Three.js transforms directly - physics bodies drive everything
-
-            // Sync visual body_main to follow the TORSO (with inertia)
-            if (toyGroupRef && torsoBody) {
-                toyGroupRef.position.copy(torsoBody.position);
-                toyGroupRef.quaternion.copy(torsoBody.quaternion);
+            // Apply hinge rotation to legs (around Z-axis/blue axis)
+            if (leftLegRef) {
+                leftLegRef.rotation.x = 0;
+                leftLegRef.rotation.y = 0;
+                leftLegRef.rotation.z = legSwingAngle; // Z-axis hinge
             }
-
-            // Sync dynamic limbs (arms and legs follow physics)
-            // CORRECT: Convert PHYSICS WORLD → VISUAL LOCAL space (position + rotation)
-            if (leftArmRef && leftArmBody) {
-                try {
-                    // --- POSITION ---
-                    const parentWorldMatrix = new THREE.Matrix4();
-                    toyGroupRef.updateMatrixWorld(true);
-                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
-
-                    const worldPos = new THREE.Vector3(
-                        leftArmBody.position.x,
-                        leftArmBody.position.y,
-                        leftArmBody.position.z
-                    );
-
-                    leftArmRef.position.copy(
-                        worldPos.applyMatrix4(parentWorldMatrix)
-                    );
-
-                    // --- ROTATION ---
-                    const parentWorldQuat = new THREE.Quaternion();
-                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
-
-                    const physicsQuat = new THREE.Quaternion(
-                        leftArmBody.quaternion.x,
-                        leftArmBody.quaternion.y,
-                        leftArmBody.quaternion.z,
-                        leftArmBody.quaternion.w
-                    );
-
-                    // localRotation = inverse(parent) × worldRotation
-                    leftArmRef.quaternion.copy(
-                        parentWorldQuat.invert().multiply(physicsQuat)
-                    );
-                } catch (e) {
-                    console.warn('Failed to sync left arm:', e.message);
-                }
-            }
-
-            if (rightArmRef && rightArmBody) {
-                try {
-                    // --- POSITION ---
-                    const parentWorldMatrix = new THREE.Matrix4();
-                    toyGroupRef.updateMatrixWorld(true);
-                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
-
-                    const worldPos = new THREE.Vector3(
-                        rightArmBody.position.x,
-                        rightArmBody.position.y,
-                        rightArmBody.position.z
-                    );
-
-                    rightArmRef.position.copy(
-                        worldPos.applyMatrix4(parentWorldMatrix)
-                    );
-
-                    // --- ROTATION ---
-                    const parentWorldQuat = new THREE.Quaternion();
-                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
-
-                    const physicsQuat = new THREE.Quaternion(
-                        rightArmBody.quaternion.x,
-                        rightArmBody.quaternion.y,
-                        rightArmBody.quaternion.z,
-                        rightArmBody.quaternion.w
-                    );
-
-                    // localRotation = inverse(parent) × worldRotation
-                    rightArmRef.quaternion.copy(
-                        parentWorldQuat.invert().multiply(physicsQuat)
-                    );
-                } catch (e) {
-                    console.warn('Failed to sync right arm:', e.message);
-                }
-            }
-
-            if (leftLegRef && leftLegBody) {
-                try {
-                    // --- POSITION ---
-                    const parentWorldMatrix = new THREE.Matrix4();
-                    toyGroupRef.updateMatrixWorld(true);
-                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
-
-                    const worldPos = new THREE.Vector3(
-                        leftLegBody.position.x,
-                        leftLegBody.position.y,
-                        leftLegBody.position.z
-                    );
-
-                    leftLegRef.position.copy(
-                        worldPos.applyMatrix4(parentWorldMatrix)
-                    );
-
-                    // --- ROTATION ---
-                    const parentWorldQuat = new THREE.Quaternion();
-                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
-
-                    const physicsQuat = new THREE.Quaternion(
-                        leftLegBody.quaternion.x,
-                        leftLegBody.quaternion.y,
-                        leftLegBody.quaternion.z,
-                        leftLegBody.quaternion.w
-                    );
-
-                    // localRotation = inverse(parent) × worldRotation
-                    leftLegRef.quaternion.copy(
-                        parentWorldQuat.invert().multiply(physicsQuat)
-                    );
-                } catch (e) {
-                    console.warn('Failed to sync left leg:', e.message);
-                }
-            }
-
-            if (rightLegRef && rightLegBody) {
-                try {
-                    // --- POSITION ---
-                    const parentWorldMatrix = new THREE.Matrix4();
-                    toyGroupRef.updateMatrixWorld(true);
-                    parentWorldMatrix.copy(toyGroupRef.matrixWorld).invert();
-
-                    const worldPos = new THREE.Vector3(
-                        rightLegBody.position.x,
-                        rightLegBody.position.y,
-                        rightLegBody.position.z
-                    );
-
-                    rightLegRef.position.copy(
-                        worldPos.applyMatrix4(parentWorldMatrix)
-                    );
-
-                    // --- ROTATION ---
-                    const parentWorldQuat = new THREE.Quaternion();
-                    toyGroupRef.getWorldQuaternion(parentWorldQuat);
-
-                    const physicsQuat = new THREE.Quaternion(
-                        rightLegBody.quaternion.x,
-                        rightLegBody.quaternion.y,
-                        rightLegBody.quaternion.z,
-                        rightLegBody.quaternion.w
-                    );
-
-                    // localRotation = inverse(parent) × worldRotation
-                    rightLegRef.quaternion.copy(
-                        parentWorldQuat.invert().multiply(physicsQuat)
-                    );
-                } catch (e) {
-                    console.warn('Failed to sync right leg:', e.message);
-                }
+            if (rightLegRef) {
+                rightLegRef.rotation.x = 0;
+                rightLegRef.rotation.y = 0;
+                rightLegRef.rotation.z = -legSwingAngle; // Opposite direction, Z-axis hinge
             }
         }
+
+        // COMMENTED OUT PHYSICS SYNC
+        // syncPhysicsToThree();
 
         renderer.render(scene, camera);
     } catch (error) {
@@ -830,6 +1066,99 @@ function animate() {
         renderer.render(scene, camera);
     }
 }
+
+// COMMENTED OUT PHYSICS SYNC - USING MANUAL CONTROL
+/*
+function syncPhysicsToThree() {
+    // Guard: Only sync if AmmoLib is loaded and physics bodies exist
+    if (!AmmoLib || !rigidBodies.torso) {
+        return;
+    }
+
+    // 🔒 Safety guard: never sync world physics into parented meshes
+    if (
+        (leftArmRef && leftArmRef.parent !== scene) ||
+        (rightArmRef && rightArmRef.parent !== scene) ||
+        (leftLegRef && leftLegRef.parent !== scene) ||
+        (rightLegRef && rightLegRef.parent !== scene)
+    ) {
+        console.warn('⚠️ Limbs still parented – skipping physics sync');
+        return;
+    }
+
+    const tmpTrans = new AmmoLib.btTransform();
+
+    // Sync torso from physics to Three.js
+    if (rigidBodies.torso && bodyMainRef) {
+        const motionState = rigidBodies.torso.getMotionState();
+        if (motionState) {
+            try {
+                motionState.getWorldTransform(tmpTrans);
+
+                const p = tmpTrans.getOrigin();
+                const q = tmpTrans.getRotation();
+
+                // Check if values are valid
+                if (isNaN(p.x()) || isNaN(p.y()) || isNaN(p.z()) || isNaN(q.x()) || isNaN(q.y()) || isNaN(q.z()) || isNaN(q.w())) {
+                    console.warn('⚠️ Invalid torso physics transform - pos:', p.x(), p.y(), p.z(), 'rot:', q.x(), q.y(), q.z(), q.w(), 'skipping sync');
+                    return;
+                }
+
+                // Debug: Log first few successful syncs
+                if (syncCount < 3) {
+                    syncCount++;
+                    console.log(`🔄 Torso sync ${syncCount}: pos (${p.x().toFixed(3)}, ${p.y().toFixed(3)}, ${p.z().toFixed(3)})`);
+                }
+
+                // Sync to the group - groups handle hierarchical transforms correctly
+                bodyMainRef.position.set(p.x(), p.y(), p.z());
+                bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
+            } catch (e) {
+                console.error('❌ Error getting torso transform:', e);
+                return;
+            }
+        } else {
+            console.warn('⚠️ Torso motion state is null');
+        }
+    }
+
+    // Sync limbs from physics to Three.js
+    const limbs = [
+        { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm },
+        { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm },
+        { name: 'leftLeg', ref: leftLegRef, body: rigidBodies.leftLeg },
+        { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg }
+    ];
+
+    limbs.forEach(({ name, ref, body }) => {
+        if (body && ref) {
+            const motionState = body.getMotionState();
+            if (motionState) {
+                try {
+                    motionState.getWorldTransform(tmpTrans);
+
+                    const p = tmpTrans.getOrigin();
+                    const q = tmpTrans.getRotation();
+
+                    // Check if values are valid
+                    if (isNaN(p.x()) || isNaN(p.y()) || isNaN(p.z()) || isNaN(q.x()) || isNaN(q.y()) || isNaN(q.z()) || isNaN(q.w())) {
+                        console.warn(`⚠️ Invalid ${name} physics transform - pos:`, p.x(), p.y(), p.z(), 'rot:', q.x(), q.y(), q.z(), q.w());
+                        return;
+                    }
+
+                    ref.position.set(p.x(), p.y(), p.z());
+                    ref.quaternion.set(q.x(), p.y(), q.z(), q.w());
+                } catch (e) {
+                    console.error(`❌ Error getting ${name} transform:`, e);
+                }
+            }
+        }
+    });
+
+    // Anchor is kinematic and doesn't need syncing back to Three.js
+    // (it only moves based on cursor input)
+}
+*/
 
 // Handle window resize
 function onWindowResize() {
