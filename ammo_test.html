@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Ammo.js Test</title>
+</head>
+<body>
+    <h1>Ammo.js Loading Test</h1>
+    <div id="status">Loading...</div>
+    <pre id="log"></pre>
+
+    <script src="https://raw.githubusercontent.com/kripken/ammo.js/master/builds/ammo.js?v=20260205-4"></script>
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+
+        function addLog(msg) {
+            log.textContent += msg + '\n';
+            console.log(msg);
+        }
+
+        addLog('Starting Ammo.js test...');
+        addLog('typeof Ammo: ' + typeof Ammo);
+
+        if (typeof Ammo !== 'undefined') {
+            addLog('Ammo function found, calling Ammo()...');
+            Ammo().then((AmmoLib) => {
+                addLog('✅ Ammo.js loaded successfully!');
+                addLog('AmmoLib.btVector3: ' + !!AmmoLib.btVector3);
+                addLog('AmmoLib.btBoxShape: ' + !!AmmoLib.btBoxShape);
+                status.textContent = '✅ SUCCESS: Ammo.js working!';
+                status.style.color = 'green';
+            }).catch((error) => {
+                addLog('❌ Ammo loading failed: ' + error.message);
+                status.textContent = '❌ FAILED';
+                status.style.color = 'red';
+            });
+        } else {
+            addLog('❌ Ammo function not found');
+            status.textContent = '❌ FAILED: Ammo not found';
+            status.style.color = 'red';
+        }
+    </script>
+</body>
+</html>
