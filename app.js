@@ -185,6 +185,20 @@ function initScene() {
                 console.warn('💡 This could explain the static + moving mesh issue');
             }
 
+            // Hide loose duplicate meshes (not in groups)
+            toyGroupRef.traverse((child) => {
+                if (child.isMesh && child.parent === toyGroupRef) {
+                    // This is a loose mesh directly under scene
+                    const name = child.name || '';
+                    if (name.includes('_') && (name.includes('body_main') || name.includes('left_arm') ||
+                        name.includes('right_arm') || name.includes('left_leg') || name.includes('right_leg'))) {
+                        // This looks like a duplicate mesh, hide it
+                        child.visible = false;
+                        console.log(`👻 Hidden loose duplicate mesh: ${name}`);
+                    }
+                }
+            });
+
             // List all meshes with their positions
             console.log('📍 All mesh positions:');
             let meshIndex = 0;
@@ -193,7 +207,7 @@ function initScene() {
                     meshIndex++;
                     const worldPos = new THREE.Vector3();
                     child.getWorldPosition(worldPos);
-                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
+                    console.log(`  ${meshIndex}. ${child.name || 'unnamed'}: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})${child.visible ? '' : ' [HIDDEN]'}`);
                 }
             });
             scene.add(toyGroupRef);
@@ -284,22 +298,28 @@ function findToyParts(object) {
         console.log('📍 Torso type:', bodyMainRef.type);
         console.log('📍 Torso children:', bodyMainRef.children.length);
         
-        // Find the actual mesh inside bodyMainRef to avoid duplicate rendering
-        let meshCount = 0;
+        // Find meshes and hide duplicates to prevent visual duplication
+        const torsoMeshes = [];
         bodyMainRef.traverse((child) => {
             if (child.isMesh) {
-                meshCount++;
-                if (!bodyMainMesh) {
-                    bodyMainMesh = child;
-                    console.log('✅ Found torso mesh:', bodyMainMesh.name);
-                }
+                torsoMeshes.push(child);
             }
         });
 
-        console.log(`📊 bodyMainRef contains ${meshCount} meshes`);
+        console.log(`📊 bodyMainRef contains ${torsoMeshes.length} meshes`);
 
-        if (!bodyMainMesh) {
-            console.warn('⚠️ No mesh found in bodyMainRef, will sync to group');
+        if (torsoMeshes.length > 0) {
+            // Use first mesh for physics sync
+            bodyMainMesh = torsoMeshes[0];
+            console.log('✅ Using torso mesh for sync:', bodyMainMesh.name);
+
+            // Hide duplicate meshes
+            for (let i = 1; i < torsoMeshes.length; i++) {
+                torsoMeshes[i].visible = false;
+                console.log(`👻 Hidden duplicate torso mesh: ${torsoMeshes[i].name}`);
+            }
+        } else {
+            console.warn('⚠️ No meshes found in bodyMainRef');
             bodyMainMesh = bodyMainRef; // Fallback to group
         }
     } else {
@@ -313,42 +333,31 @@ function findToyParts(object) {
         });
     }
 
-    // STEP 1: IDENTIFY THE JOINT EMPTY
-    // Search for Empty objects with various possible names after renaming
-    const emptyNames = ['Empty001', 'Empty002', 'Empty', 'empty', 'joint', 'Joint', 'pivot', 'Pivot'];
+    // STEP 1: IDENTIFY THE JOINT CONSTRAINT (was Empty in Blender)
+    // Search for constraint objects that represent joints
+    const constraintNames = ['Constraint_left_hand', 'Constraint_right_hand',
+                           'Constraint_left_leg', 'Constraint_right_leg'];
+
+    // For torso joint, look for any constraint or use origin
     jointEmptyRef = null;
 
-    // First try specific names
-    for (const name of emptyNames) {
-        jointEmptyRef = findCollectionInGLTF(object, name);
-        if (jointEmptyRef) break;
-    }
-
-    // If not found, search for any object containing "empty" or "joint" in the name
-    if (!jointEmptyRef) {
-        object.traverse((child) => {
-            if (!jointEmptyRef && child.name) {
-                const name = child.name.toLowerCase();
-                if (name.includes('empty') || name.includes('joint') || name.includes('pivot')) {
-                    jointEmptyRef = child;
-                    console.log('✅ Found Empty-like object by pattern matching:', child.name);
-                }
-            }
-        });
-    }
+    // Try to find a central constraint or use origin as fallback
+    jointEmptyRef = findCollectionInGLTF(object, 'Constraint_left_hand') ||
+                   findCollectionInGLTF(object, 'Constraint_right_hand') ||
+                   findCollectionInGLTF(object, 'Constraint_left_leg') ||
+                   findCollectionInGLTF(object, 'Constraint_right_leg');
 
     if (!jointEmptyRef) {
-        console.error('❌ Joint Empty not found — searched for: Empty001, Empty002, Empty, joint, pivot');
-        console.error('💡 Check Blender: ensure the Empty object exists and has a recognizable name');
-
-        // List all objects to help identify the Empty
-        console.log('📋 All available objects in GLTF:');
-        object.traverse((child) => {
-            console.log(`   "${child.name}" (${child.type})`);
-        });
+        // Create a virtual joint at origin if no constraints found
+        console.log('⚠️ No constraint objects found, using origin as joint');
+        jointEmptyRef = {
+            name: 'virtual_joint',
+            position: new THREE.Vector3(0, 0, 0),
+            getWorldPosition: (vec) => vec.set(0, 0, 0)
+        };
     } else {
-        console.log('✅ Joint Empty found:', jointEmptyRef.name);
-        console.log('📍 Joint Empty position:', jointEmptyRef.position);
+        console.log('✅ Using constraint as joint:', jointEmptyRef.name);
+        console.log('📍 Joint position:', jointEmptyRef.position);
     }
 
     // Find limbs for future physics setup - try multiple naming patterns
@@ -650,6 +659,20 @@ function createConstraints() {
         if (!body || !ref) {
             console.log(`⚠️ Skipping constraint for ${name} - body or reference missing`);
             return;
+        }
+
+        // Hide duplicate meshes in limbs
+        const limbMeshes = [];
+        ref.traverse((child) => {
+            if (child.isMesh) {
+                limbMeshes.push(child);
+            }
+        });
+
+        // Hide all but first mesh
+        for (let i = 1; i < limbMeshes.length; i++) {
+            limbMeshes[i].visible = false;
+            console.log(`👻 Hidden duplicate ${name} mesh: ${limbMeshes[i].name}`);
         }
 
         // Get joint position (use limb origin as joint)
