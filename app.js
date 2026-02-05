@@ -312,7 +312,7 @@ function setupPhysicsBodies() {
             leftArmRef.getWorldQuaternion(limbWorldQuat);
 
             leftArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
-            leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
+            leftArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 0.5, 0.05))); // Larger collision shape to prevent visual overlap
             leftArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             leftArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
@@ -328,7 +328,7 @@ function setupPhysicsBodies() {
             rightArmRef.getWorldQuaternion(limbWorldQuat);
 
             rightArmBody = new CANNON.Body({ mass: 0.8 }); // Meaningful mass for physics
-            rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.02, 0.4, 0.02)));
+            rightArmBody.addShape(new CANNON.Box(new CANNON.Vec3(0.05, 0.5, 0.05))); // Larger collision shape to prevent visual overlap
             rightArmBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             rightArmBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
@@ -345,7 +345,7 @@ function setupPhysicsBodies() {
             leftLegRef.getWorldQuaternion(limbWorldQuat);
 
             leftLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
-            leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
+            leftLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.06, 0.6, 0.06))); // Larger collision shape to prevent visual overlap
             leftLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             leftLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
@@ -361,7 +361,7 @@ function setupPhysicsBodies() {
             rightLegRef.getWorldQuaternion(limbWorldQuat);
 
             rightLegBody = new CANNON.Body({ mass: 1.2 }); // Meaningful mass for physics
-            rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.03, 0.5, 0.03)));
+            rightLegBody.addShape(new CANNON.Box(new CANNON.Vec3(0.06, 0.6, 0.06))); // Larger collision shape to prevent visual overlap
             rightLegBody.position.set(limbWorldPos.x, limbWorldPos.y, limbWorldPos.z);
             rightLegBody.quaternion.set(limbWorldQuat.x, limbWorldQuat.y, limbWorldQuat.z, limbWorldQuat.w);
 
