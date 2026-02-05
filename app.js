@@ -66,12 +66,7 @@ const pointLight = new THREE.PointLight(0xffffff, 0.5, 20);
 pointLight.position.set(0, 10, 0);
 scene.add(pointLight);
 
-// DEBUG GIZMOS - Coordinate system visualization
-// Global axes helper (shows world XYZ at origin)
-globalAxesHelper = new THREE.AxesHelper(2); // 2 units long
-globalAxesHelper.position.set(0, 0, 0);
-scene.add(globalAxesHelper);
-console.log('✅ Added global coordinate system gizmo (red=X, green=Y, blue=Z)');
+// DEBUG GIZMOS will be added after GLTF loads (variables not available yet)
 
 // GLTF Loader for r128
 const loader = new THREE.GLTFLoader();
@@ -272,6 +267,12 @@ function initScene() {
             }
 
             // Add coordinate system gizmos for debugging
+            // Global axes helper (shows world XYZ at origin)
+            globalAxesHelper = new THREE.AxesHelper(2); // 2 units long
+            globalAxesHelper.position.set(0, 0, 0);
+            scene.add(globalAxesHelper);
+            console.log('✅ Added global coordinate system gizmo (red=X, green=Y, blue=Z)');
+
             if (bodyMainRef) {
                 torsoAxesHelper = new THREE.AxesHelper(1); // 1 unit long
                 bodyMainRef.add(torsoAxesHelper);
