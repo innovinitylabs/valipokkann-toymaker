@@ -668,11 +668,7 @@ function createRigidBodies() {
             throw new Error("❌ Failed to create torso rigid body!");
         }
 
-        // TEMPORARY: Make kinematic so it follows mesh during manual control
-        rigidBodies.torso.setCollisionFlags(
-            rigidBodies.torso.getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
-        );
-
+        // Torso stays dynamic (not kinematic) - only limbs are kinematic for manual control
         // Set activation state
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
 
@@ -1087,26 +1083,8 @@ function syncKinematicRigidBodies() {
 
     const tmpTrans = new AmmoLib.btTransform();
 
-    // Sync torso
-    if (rigidBodies.torso && bodyMainRef && (rigidBodies.torso.getCollisionFlags() & 2)) {
-        try {
-            const worldPos = new THREE.Vector3();
-            const worldQuat = new THREE.Quaternion();
-            bodyMainRef.getWorldPosition(worldPos);
-            bodyMainRef.getWorldQuaternion(worldQuat);
-
-            tmpTrans.setIdentity();
-            tmpTrans.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
-            tmpTrans.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
-
-            rigidBodies.torso.getMotionState().setWorldTransform(tmpTrans);
-            rigidBodies.torso.setActivationState(4);
-        } catch (e) {
-            console.error('❌ Error syncing torso kinematic body:', e);
-        }
-    }
-
     // Sync limbs from Three.js meshes to kinematic rigid bodies
+    // Note: Torso is dynamic, not kinematic
     const limbs = [
         { name: 'leftArm', ref: leftArmRef, body: rigidBodies.leftArm },
         { name: 'rightArm', ref: rightArmRef, body: rigidBodies.rightArm },
