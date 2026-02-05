@@ -102,19 +102,23 @@ loader.load(
         // Wait for Ammo.js to be available
         const initAmmoPhysics = () => {
             if (typeof Ammo === 'function') {
+                console.log('🔄 Ammo function found, initializing...');
                 Ammo().then((AmmoLib) => {
                     Ammo = AmmoLib;
+                    console.log('✅ Ammo.js loaded, calling initPhysics()...');
                     initPhysics();
-                    console.log('Ammo.js physics initialized');
+                    console.log('🎮 Ammo.js physics initialized successfully!');
                 }).catch((error) => {
-                    console.error('Failed to initialize Ammo.js:', error);
+                    console.error('❌ Failed to initialize Ammo.js:', error);
                 });
             } else {
+                console.log('⏳ Ammo not ready yet, retrying in 100ms...');
                 // Retry after a short delay if Ammo isn't loaded yet
                 setTimeout(initAmmoPhysics, 100);
             }
         };
 
+        console.log('🚀 Starting Ammo.js initialization...');
         initAmmoPhysics();
 
         console.log('GLTF loaded successfully');
@@ -258,15 +262,18 @@ function initPhysics() {
         // Set gravity (negative Y in Three.js = down)
         physicsWorld.setGravity(new Ammo.btVector3(0, -9.8, 0));
 
-        console.log('✅ Physics world created');
+        console.log('✅ Physics world created with gravity');
 
         // Create rigid bodies for toy parts
+        console.log('🏗️ Creating rigid bodies...');
         createRigidBodies();
 
         // Create hinge constraints
+        console.log('🔗 Creating constraints...');
         createConstraints();
 
         console.log('🎮 Ammo.js jumping jack ready - move mouse to tilt, click to apply torque!');
+        console.log('Available rigid bodies:', Object.keys(rigidBodies));
 
     } catch (error) {
         console.error('❌ Error initializing physics:', error);
@@ -521,15 +528,22 @@ function onMouseMove(event) {
 function onMouseDown(event) {
     try {
         mousePressed = true;
+        console.log('🖱️ Mouse down detected');
 
         // Apply torque to stick, not torso
         if (rigidBodies.stick) {
-          rigidBodies.stick.activate(true);
+            console.log('🔄 Applying torque to stick...');
+            rigidBodies.stick.activate(true);
 
-          const dir = Math.random() > 0.5 ? 1 : -1;
-          rigidBodies.stick.applyTorqueImpulse(
-            new Ammo.btVector3(0, dir * TORQUE_IMPULSE, 0)
-          );
+            const dir = Math.random() > 0.5 ? 1 : -1;
+            const torqueValue = dir * TORQUE_IMPULSE;
+            rigidBodies.stick.applyTorqueImpulse(
+                new Ammo.btVector3(0, torqueValue, 0)
+            );
+            console.log(`✅ Applied torque: ${torqueValue} to stick`);
+        } else {
+            console.log('❌ No stick body found - physics not initialized');
+            console.log('Available bodies:', Object.keys(rigidBodies));
         }
     } catch (error) {
         console.error('❌ Mouse down error:', error);
@@ -562,14 +576,25 @@ function updateToyInteraction() {
     try {
         // Tilt via stick torque
         if (rigidBodies.stick) {
-          rigidBodies.stick.activate(true);
+            rigidBodies.stick.activate(true);
 
-          const tx = mouse.y * TILT_FORCE;
-          const tz = -mouse.x * TILT_FORCE;
+            const tx = mouse.y * TILT_FORCE;
+            const tz = -mouse.x * TILT_FORCE;
 
-          rigidBodies.stick.applyTorqueImpulse(
-            new Ammo.btVector3(tx, 0, tz)
-          );
+            if (Math.abs(tx) > 0.01 || Math.abs(tz) > 0.01) { // Only log significant movements
+                console.log(`🎮 Applying tilt torque: tx=${tx.toFixed(3)}, tz=${tz.toFixed(3)}`);
+            }
+
+            rigidBodies.stick.applyTorqueImpulse(
+                new Ammo.btVector3(tx, 0, tz)
+            );
+        } else {
+            // Only log once per second to avoid spam
+            const now = Date.now();
+            if (!window.lastStickCheck || now - window.lastStickCheck > 1000) {
+                console.log('⏳ Stick body not ready for tilt');
+                window.lastStickCheck = now;
+            }
         }
     } catch (error) {
         console.error('❌ Toy interaction error:', error);
@@ -590,6 +615,15 @@ function animate(currentTime = 0) {
         // Step physics simulation
         if (physicsWorld) {
             physicsWorld.stepSimulation(delta, 10, 1/60); // Fixed time step for stability
+            // Debug: Log physics step occasionally
+            if (Math.floor(currentTime / 1000) !== Math.floor(lastTime / 1000)) {
+                console.log('⚙️ Physics simulation running...');
+            }
+        } else {
+            // Debug: Only log once per second if no physics world
+            if (Math.floor(currentTime / 1000) !== Math.floor(lastTime / 1000)) {
+                console.log('⏳ No physics world - waiting for Ammo.js initialization');
+            }
         }
 
         // Sync physics transforms to Three.js meshes
