@@ -206,10 +206,10 @@ function updateSolverSettings() {
         solverInfo.m_erp2 = 0.6; // More flexible constraint handling
         solverInfo.m_globalCfm = 0.1; // Some constraint force mixing for elasticity
     } else {
-        // Hinge mode: more iterations for stable, constrained physics
-        solverInfo.m_numIterations = 20; // Full iterations for stability
-        solverInfo.m_erp = 0.8; // Precise error correction
-        solverInfo.m_erp2 = 0.8; // Tight constraint handling
+        // Hinge mode: maximum iterations for rock-solid constraint stability
+        solverInfo.m_numIterations = 30; // Increased for maximum stability
+        solverInfo.m_erp = 0.9; // Ultra-precise error correction
+        solverInfo.m_erp2 = 0.9; // Maximum constraint handling
         solverInfo.m_globalCfm = 0.0; // No constraint force mixing
     }
 
