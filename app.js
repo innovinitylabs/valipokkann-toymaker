@@ -398,15 +398,32 @@ function findToyParts(object) {
         // console.log('📍 Torso type:', bodyMainRef.type);
         // console.log('📍 Torso children:', bodyMainRef.children.length);
         
-        // Count meshes in torso group (for debugging)
-        let torsoMeshCount = 0;
+        // Identify and analyze torso meshes for individual collision shapes
+        const torsoMeshes = [];
         bodyMainRef.traverse((child) => {
             if (child.isMesh) {
-                torsoMeshCount++;
+                torsoMeshes.push({
+                    name: child.name || 'unnamed',
+                    mesh: child,
+                    geometry: child.geometry,
+                    worldPosition: new THREE.Vector3(),
+                    worldQuaternion: new THREE.Quaternion(),
+                    boundingBox: new THREE.Box3().setFromObject(child)
+                });
+                // Update world position for later use
+                child.getWorldPosition(torsoMeshes[torsoMeshes.length - 1].worldPosition);
+                child.getWorldQuaternion(torsoMeshes[torsoMeshes.length - 1].worldQuaternion);
             }
         });
 
-            // console.log(`📊 bodyMainRef contains ${torsoMeshCount} meshes`);
+        console.log(`📊 bodyMainRef contains ${torsoMeshes.length} meshes:`);
+        torsoMeshes.forEach((meshInfo, index) => {
+            const size = meshInfo.boundingBox.getSize(new THREE.Vector3());
+            console.log(`  ${index + 1}. "${meshInfo.name}": size(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}) at (${meshInfo.worldPosition.x.toFixed(2)}, ${meshInfo.worldPosition.y.toFixed(2)}, ${meshInfo.worldPosition.z.toFixed(2)})`);
+        });
+
+        // Store torso meshes globally for collider creation
+        window.torsoMeshes = torsoMeshes;
 
         // console.log('✅ Using torso group for sync:', bodyMainRef.name);
     } else {
@@ -604,34 +621,6 @@ function createRigidBodies() {
 
         physicsWorld.addRigidBody(rigidBodies.anchor, GROUP_TORSO, GROUP_TORSO); // Anchor collides with everything
         // console.log('✅ Created static anchor body (kinematic, follows cursor)');
-
-        // DEBUG: Add two test collision bodies to verify collision detection works
-        {
-            const testBody1 = new AmmoLib.btRigidBody(new AmmoLib.btRigidBodyConstructionInfo(
-                0, // static
-                new AmmoLib.btDefaultMotionState(new AmmoLib.btTransform(
-                    new AmmoLib.btQuaternion(0, 0, 0, 1),
-                    new AmmoLib.btVector3(0, 0, 0)
-                )),
-                new AmmoLib.btBoxShape(new AmmoLib.btVector3(0.5, 0.5, 0.5))
-            ));
-            testBody1.setActivationState(4);
-
-            const testBody2 = new AmmoLib.btRigidBody(new AmmoLib.btRigidBodyConstructionInfo(
-                0, // static
-                new AmmoLib.btDefaultMotionState(new AmmoLib.btTransform(
-                    new AmmoLib.btQuaternion(0, 0, 0, 1),
-                    new AmmoLib.btVector3(0.8, 0, 0) // Should overlap with testBody1
-                )),
-                new AmmoLib.btBoxShape(new AmmoLib.btVector3(0.5, 0.5, 0.5))
-            ));
-            testBody2.setActivationState(4);
-
-            physicsWorld.addRigidBody(testBody1);
-            physicsWorld.addRigidBody(testBody2);
-
-            console.log('Added test collision bodies - should generate contact manifolds if collision detection works');
-        }
     }
 
     // STEP 4: CREATE DYNAMIC TORSO BODY
@@ -709,64 +698,68 @@ function createRigidBodies() {
         // console.log(`✅ DYNAMIC TORSO CREATED (mass: ${mass}, size: ${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)})`);
     }
 
-    // STEP 5: CREATE TORSO COLLISION PROXIES (static collision-only bodies)
+    // STEP 5: CREATE INDIVIDUAL TORSO MESH COLLIDERS
     {
-        // Get torso world position for proxy positioning
-        const torsoPos = new THREE.Vector3();
-        bodyMainRef.getWorldPosition(torsoPos);
+        if (!window.torsoMeshes || window.torsoMeshes.length === 0) {
+            console.error('❌ No torso meshes found for collision creation');
+            return;
+        }
 
-        // Create 2-3 box colliders representing wooden plates of the torso
-        const proxies = [
-            {
-                name: 'torsoUpper',
-                offset: new THREE.Vector3(0, 0.8, 0), // Upper torso plate
-                size: new THREE.Vector3(0.6, 0.1, 0.4) // Thin plate
-            },
-            {
-                name: 'torsoLower',
-                offset: new THREE.Vector3(0, -0.3, 0), // Lower torso plate
-                size: new THREE.Vector3(0.5, 0.1, 0.3) // Slightly smaller
+        rigidBodies.torsoMeshColliders = []; // Store individual mesh colliders
+
+        window.torsoMeshes.forEach((meshInfo, index) => {
+            const { name, mesh, boundingBox, worldPosition, worldQuaternion } = meshInfo;
+
+            // Skip certain meshes that shouldn't have collision (like very small parts)
+            if (name.includes('stick') || name.includes('string') || boundingBox.getSize(new THREE.Vector3()).length() < 0.1) {
+                console.log(`⏭️ Skipping collision for small mesh: ${name}`);
+                return;
             }
-        ];
 
-        rigidBodies.torsoProxies = []; // Store proxy bodies for later updates
+            // Get bounding box dimensions
+            const size = boundingBox.getSize(new THREE.Vector3());
+            console.log(`🔧 Creating collider for torso mesh "${name}": size(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
 
-        proxies.forEach(proxy => {
-            // Create box shape for this proxy
+            // Create box shape based on mesh bounding box (with small padding)
+            const padding = 0.02; // Small padding to prevent clipping
             const halfExtents = new AmmoLib.btVector3(
-                proxy.size.x * 0.5,
-                proxy.size.y * 0.5,
-                proxy.size.z * 0.5
+                (size.x * 0.5) + padding,
+                (size.y * 0.5) + padding,
+                (size.z * 0.5) + padding
             );
+
             const shape = new AmmoLib.btBoxShape(halfExtents);
 
-            // Static body (mass = 0)
+            // Static body (mass = 0) - kinematic collision-only
             const localInertia = new AmmoLib.btVector3(0, 0, 0);
 
-            // Position proxy relative to torso center
-            const proxyPos = torsoPos.clone().add(proxy.offset);
+            // Position collider at mesh world position
             const transform = new AmmoLib.btTransform();
             transform.setIdentity();
-            transform.setOrigin(new AmmoLib.btVector3(proxyPos.x, proxyPos.y, proxyPos.z));
-            transform.setRotation(new AmmoLib.btQuaternion(0, 0, 0, 1)); // No rotation initially
+            transform.setOrigin(new AmmoLib.btVector3(worldPosition.x, worldPosition.y, worldPosition.z));
+            transform.setRotation(new AmmoLib.btQuaternion(worldQuaternion.x, worldQuaternion.y, worldQuaternion.z, worldQuaternion.w));
 
             const motionState = new AmmoLib.btDefaultMotionState(transform);
             const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(0, motionState, shape, localInertia);
 
-            const proxyBody = new AmmoLib.btRigidBody(rbInfo);
-            proxyBody.setCollisionFlags(proxyBody.getCollisionFlags() | 1); // CF_STATIC_OBJECT
-            proxyBody.setActivationState(4); // DISABLE_DEACTIVATION
+            const colliderBody = new AmmoLib.btRigidBody(rbInfo);
+            colliderBody.setCollisionFlags(colliderBody.getCollisionFlags() | 1); // CF_STATIC_OBJECT
+            colliderBody.setActivationState(4); // DISABLE_DEACTIVATION
 
-            // Add to physics world - only collides with limbs
-            physicsWorld.addRigidBody(proxyBody, GROUP_TORSO_PART, GROUP_LIMB);
+            // Add to physics world - collides with limbs
+            physicsWorld.addRigidBody(colliderBody, GROUP_TORSO_PART, GROUP_LIMB);
 
             // Store for later position updates
-            rigidBodies.torsoProxies.push({
-                body: proxyBody,
-                offset: proxy.offset.clone(),
-                name: proxy.name
+            rigidBodies.torsoMeshColliders.push({
+                body: colliderBody,
+                mesh: mesh,
+                name: name,
+                initialPosition: worldPosition.clone(),
+                initialQuaternion: worldQuaternion.clone()
             });
         });
+
+        console.log(`✅ Created ${rigidBodies.torsoMeshColliders.length} individual torso mesh colliders`);
     }
 
     // Create limbs (arms and legs)
@@ -788,11 +781,10 @@ function createRigidBodies() {
         ref.getWorldPosition(worldPos);
         ref.getWorldQuaternion(worldQuat);
 
-        console.log(`Creating limb ${name} at position: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
 
         // Use capsule colliders for limbs (wooden rod physics)
         // Measure limb dimensions manually for realistic wooden toy behavior
-        const radius = 0.12;      // TEMP: increased for testing collision
+        const radius = 0.08;      // thickness of wooden limb
         const height = 1.2;       // length excluding caps
 
         const shape = new AmmoLib.btCapsuleShape(radius, height);
@@ -812,7 +804,6 @@ function createRigidBodies() {
         // Capsules are Y-aligned by default, so apply the world rotation
         initialTransform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
 
-        console.log(`Limb ${name} rotation: (${worldQuat.x.toFixed(3)}, ${worldQuat.y.toFixed(3)}, ${worldQuat.z.toFixed(3)}, ${worldQuat.w.toFixed(3)})`);
 
         // Create motion state with initial transform
         const motionState = new AmmoLib.btDefaultMotionState(initialTransform);
@@ -841,14 +832,8 @@ function createRigidBodies() {
             console.warn(`Could not set physics properties for ${name}:`, e.message);
         }
 
-        // DEBUG: Test limb-to-limb collision
-        console.log(`Adding limb ${name} to physics world: group=${GROUP_LIMB}, mask=${GROUP_LIMB | GROUP_TORSO_PART}`);
-        console.log(`Limb ${name} created with mass=${mass}, radius=${radius}, height=${height}`);
-        // TEMP: Test with no collision filtering at all
-        physicsWorld.addRigidBody(rigidBodies[name]); // No collision filtering - should collide with everything
-
-        // TEMP: Force collision by setting mask to collide with everything
-        // physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, -1); // Collide with all groups
+        // Add limb to physics world with proper collision groups
+        physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB | GROUP_TORSO_PART); // Limbs collide with other limbs and torso parts
     });
 
     // FINAL SAFETY CHECK: Ensure limbs are dynamic, not kinematic
@@ -1280,21 +1265,6 @@ function animate(currentTime = 0) {
             try {
                 physicsWorld.stepSimulation(delta, 10);
 
-                // DEBUG: Check for collision pairs
-                if (frameCount % 60 === 0) { // Every second
-                    const dispatcher = physicsWorld.getDispatcher();
-                    const numManifolds = dispatcher.getNumManifolds();
-                    console.log(`Physics step: ${numManifolds} collision manifolds detected`);
-
-                    for (let i = 0; i < numManifolds; i++) {
-                        const contactManifold = dispatcher.getManifoldByIndexInternal(i);
-                        const body0 = contactManifold.getBody0();
-                        const body1 = contactManifold.getBody1();
-                        const numContacts = contactManifold.getNumContacts();
-                        console.log(`Collision between bodies with ${numContacts} contact points`);
-                    }
-                }
-
                 // DEBUG: Check if constraints are being processed
                 // if (frameCount % 120 === 0) {
                 //     console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
@@ -1380,37 +1350,26 @@ function syncPhysicsToThree() {
         }
     }
 
-    // Sync torso collision proxies to follow torso motion
-    if (rigidBodies.torsoProxies && rigidBodies.torso) {
-        const torsoMotionState = rigidBodies.torso.getMotionState();
-        if (torsoMotionState) {
-            const torsoTransform = new AmmoLib.btTransform();
-            torsoMotionState.getWorldTransform(torsoTransform);
-            const torsoPos = torsoTransform.getOrigin();
-            const torsoRot = torsoTransform.getRotation();
+    // Sync individual torso mesh colliders to follow their respective meshes
+    if (rigidBodies.torsoMeshColliders && rigidBodies.torsoMeshColliders.length > 0) {
+        rigidBodies.torsoMeshColliders.forEach(collider => {
+            const { body, mesh, initialPosition, initialQuaternion } = collider;
 
-            // Update each proxy to follow the torso
-            rigidBodies.torsoProxies.forEach(proxy => {
-                const proxyTransform = new AmmoLib.btTransform();
-                proxyTransform.setIdentity();
+            // Get current mesh world transform
+            const currentPos = new THREE.Vector3();
+            const currentQuat = new THREE.Quaternion();
+            mesh.getWorldPosition(currentPos);
+            mesh.getWorldQuaternion(currentQuat);
 
-                // Apply torso rotation
-                proxyTransform.setRotation(torsoRot);
+            // Create transform for collider
+            const colliderTransform = new AmmoLib.btTransform();
+            colliderTransform.setIdentity();
+            colliderTransform.setOrigin(new AmmoLib.btVector3(currentPos.x, currentPos.y, currentPos.z));
+            colliderTransform.setRotation(new AmmoLib.btQuaternion(currentQuat.x, currentQuat.y, currentQuat.z, currentQuat.w));
 
-                // Calculate proxy position: torso position + rotated offset
-                const rotatedOffset = proxy.offset.clone();
-                rotatedOffset.applyQuaternion(new THREE.Quaternion(torsoRot.x(), torsoRot.y(), torsoRot.z(), torsoRot.w()));
-                const proxyPos = new AmmoLib.btVector3(
-                    torsoPos.x() + rotatedOffset.x,
-                    torsoPos.y() + rotatedOffset.y,
-                    torsoPos.z() + rotatedOffset.z
-                );
-                proxyTransform.setOrigin(proxyPos);
-
-                // Update proxy position (static bodies need manual transform updates)
-                proxy.body.setWorldTransform(proxyTransform);
-            });
-        }
+            // Update collider position (static bodies need manual transform updates)
+            body.setWorldTransform(colliderTransform);
+        });
     }
 
     // Sync limbs from physics to Three.js
