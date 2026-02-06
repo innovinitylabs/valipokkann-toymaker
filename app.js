@@ -909,11 +909,19 @@ let physicsMeshMap = new Map();
 // Toy references are initialized when GLTF loads
 console.log('Motor-based Ammo.js jumping jack initialized');
 
-// Mouse event handlers
+// Mouse movement tracking
+let mouseMoving = false;
+let lastMouseMoveTime = 0;
+const MOUSE_STOP_TIMEOUT = 100; // ms after mouse stops moving
+
 function onMouseMove(event) {
     // Convert mouse position to normalized device coordinates (-1 to +1)
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    // Track mouse movement
+    mouseMoving = true;
+    lastMouseMoveTime = performance.now();
 
     // STEP 7: CURSOR CONTROL - Update anchor position targets
     // Convert screen position to world offset
@@ -999,8 +1007,13 @@ function animate(currentTime = 0) {
             console.log(`🎬 Animation running - frame ${frameCount}`);
         }
 
-        // PHYSICS CONTROL - Mouse moves torso to test hinge constraints
+        // PHYSICS CONTROL - Smart mouse control with stop detection
         if (AmmoLib && physicsWorld) {
+            // Check if mouse has stopped moving (apply timeout)
+            const timeSinceMouseMove = performance.now() - lastMouseMoveTime;
+            if (timeSinceMouseMove > MOUSE_STOP_TIMEOUT) {
+                mouseMoving = false;
+            }
             // Check if mouse has significant input
             const hasInput = Math.abs(currentAnchorX) > 0.1 || Math.abs(currentAnchorZ) > 0.1;
             if (frameCount % 60 === 0 && hasInput) {
@@ -1034,12 +1047,14 @@ function animate(currentTime = 0) {
                     console.log(`🔄 After torque - AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
                 }
 
-                // Moderate damping for controlled motion
-                rigidBodies.torso.setDamping(0.2, 0.4); // Linear, angular damping
-
-                // TEMPORARILY DISABLE velocity clearing to test if motion works
-                /*
-                */
+                // Set damping based on mouse activity
+                if (mouseMoving) {
+                    // Light damping when mouse is moving
+                    rigidBodies.torso.setDamping(0.1, 0.2);
+                } else {
+                    // Strong damping when mouse stops to bring rotation to rest
+                    rigidBodies.torso.setDamping(0.5, 0.8);
+                }
             }
 
             // Step real physics simulation
