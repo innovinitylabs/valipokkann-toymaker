@@ -121,12 +121,22 @@ function validatePhysicsAuthority() {
     }
 
     // Check collision flags - should not be kinematic (CF_KINEMATIC_OBJECT = 2)
-    const flags = rigidBodies.torso.getCollisionFlags();
-    if (flags & 2) { // CF_KINEMATIC_OBJECT
+    const torsoFlags = rigidBodies.torso.getCollisionFlags();
+    if (torsoFlags & 2) { // CF_KINEMATIC_OBJECT
         throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso is kinematic - must be dynamic!");
     }
 
-    console.log("✅ PHYSICS AUTHORITY VALIDATED: Torso is dynamic");
+    // Check that limbs are also dynamic
+    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+        if (rigidBodies[name]) {
+            const flags = rigidBodies[name].getCollisionFlags();
+            if (flags & 2) { // CF_KINEMATIC_OBJECT
+                throw new Error(`❌ PHYSICS AUTHORITY VIOLATION: ${name} is kinematic - must be dynamic!`);
+            }
+        }
+    });
+
+    console.log("✅ PHYSICS AUTHORITY VALIDATED: Torso and limbs are dynamic");
 }
 
 function safeSetWorldTransform(body, transform) {
@@ -304,15 +314,7 @@ function initScene() {
                 if (rigidBodies.anchor && rigidBodies.torso) {
                     createConstraints();
 
-                    // Now switch limbs from kinematic to dynamic (safe now that constraints are set)
-                    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
-                        if (rigidBodies[name]) {
-                            const flags = rigidBodies[name].getCollisionFlags();
-                            rigidBodies[name].setCollisionFlags(flags & ~2); // Remove CF_KINEMATIC_OBJECT
-                            // Force activation to ensure limbs respond to physics
-                            rigidBodies[name].activate(true);
-                        }
-                    });
+                    // Limbs are already dynamic from creation - no kinematic switching needed
 
                     // Enable gravity for realistic physics
                     physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
@@ -713,15 +715,18 @@ function createRigidBodies() {
 
         rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
 
-        // TEMPORARY: Make kinematic initially to prevent collision during setup
-        rigidBodies[name].setCollisionFlags(
-            rigidBodies[name].getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
-        );
+        // SAFETY CHECK: Ensure limb is NOT kinematic
+        const flags = rigidBodies[name].getCollisionFlags();
+        if (flags & 2) { // CF_KINEMATIC_OBJECT
+            console.error(`❌ ${name} was created as kinematic - this breaks physics!`);
+            throw new Error(`${name} must be dynamic from creation`);
+        }
+        console.log(`✅ ${name} created as dynamic body (flags: ${flags})`);
 
-        // Basic setup
+        // Dynamic body setup - limbs must be dynamic from creation
         rigidBodies[name].setDamping(0.1, 0.2); // Normal damping
-        rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION
-        rigidBodies[name].setSleepingThresholds(0, 0);
+        rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
+        rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
         // Wood-like physics properties
         rigidBodies[name].setFriction(0.6);
@@ -730,6 +735,18 @@ function createRigidBodies() {
         rigidBodies[name].setRestitution(0.05); // Wood barely bounces
 
         physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB); // Limbs collide with other limbs only
+    });
+
+    // FINAL SAFETY CHECK: Ensure limbs are dynamic, not kinematic
+    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+        if (rigidBodies[name]) {
+            const flags = rigidBodies[name].getCollisionFlags();
+            if (flags & 2) { // CF_KINEMATIC_OBJECT
+                console.error(`❌ CRITICAL: ${name} is still kinematic! Physics will not work.`);
+                throw new Error(`${name} must be dynamic for articulated physics`);
+            }
+            console.log(`✅ ${name} confirmed dynamic (flags: ${flags})`);
+        }
     });
 
     console.log('📊 Rigid bodies summary:', {
@@ -1054,12 +1071,12 @@ function animate(currentTime = 0) {
                         console.log(`🔄 AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
                     }
 
-        // Keep limbs lightly damped and active for centrifugal response
+                // Keep limbs lightly damped and aggressively active for centrifugal response
                 ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
                     if (rigidBodies[name]) {
                         rigidBodies[name].setDamping(0.01, 0.02); // Very light damping
-                        rigidBodies[name].activate(true); // Keep limbs active
-                        rigidBodies[name].setSleepingThresholds(0, 0);
+                        rigidBodies[name].activate(true); // Aggressively keep limbs active
+                        rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
                         // DEBUG: Log limb positions during spin
                         if (mouseButtonDown && frameCount % 60 === 0) {
