@@ -7,6 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Elastic Memory – becoming a Toymaker</title>
+    <link rel="icon" type="image/svg+xml" href="valipokkann.svg">
     <style>
         body {
             margin: 0;
@@ -354,7 +355,42 @@
                 transform: scale(0.95);
             }
         }
+
+        /* Mode button styles */
+        #modeButtons button {
+            transition: all 0.2s ease;
+        }
+
+        #modeButtons button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        #modeButtons button:active {
+            transform: translateY(0);
+        }
+
+        /* Mobile responsive mode buttons */
+        @media (max-width: 768px) {
+            #modeButtons {
+                bottom: 15px;
+                gap: 8px;
+            }
+
+            #modeButtons button {
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+        }
+
     </style>
+
+    <!-- Mode selection buttons -->
+    <div id="modeButtons" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 100;">
+        <button id="hingeModeBtn" style="padding: 10px 20px; background: rgba(255,0,0,0.9); color: white; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">🔗 Hinge</button>
+        <button id="elasticModeBtn" style="padding: 10px 20px; background: rgba(100,100,100,0.8); color: white; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">🌊 Elastic</button>
+    </div>
+
 
     <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; font-size: 16px;">
         Loading Ammo.js physics engine...
@@ -447,6 +483,72 @@
                     event.stopPropagation();
                 }, { passive: true });
             }
+
+            // Mode switching functionality
+            const hingeModeBtn = document.getElementById('hingeModeBtn');
+            const elasticModeBtn = document.getElementById('elasticModeBtn');
+
+            // Set default mode to hinge
+            window.physicsMode = 'hinge';
+
+            function setActiveMode(mode) {
+                window.physicsMode = mode;
+
+                // Update button styles
+                if (mode === 'hinge') {
+                    hingeModeBtn.style.background = 'rgba(255,0,0,0.9)';
+                    hingeModeBtn.style.borderColor = 'rgba(255,255,255,0.5)';
+                    elasticModeBtn.style.background = 'rgba(100,100,100,0.8)';
+                    elasticModeBtn.style.borderColor = 'rgba(255,255,255,0.3)';
+                } else {
+                    elasticModeBtn.style.background = 'rgba(0,150,255,0.9)';
+                    elasticModeBtn.style.borderColor = 'rgba(255,255,255,0.5)';
+                    hingeModeBtn.style.background = 'rgba(100,100,100,0.8)';
+                    hingeModeBtn.style.borderColor = 'rgba(255,255,255,0.3)';
+                }
+
+                // console.log(`🔄 Switched to ${mode} mode`);
+
+                // Update solver settings for the new mode
+                if (window.updateSolverSettings) {
+                    window.updateSolverSettings();
+                }
+
+                // Reset toy when switching modes to ensure clean state
+                if (window.resetToy) {
+                    setTimeout(() => window.resetToy(), 100);
+                }
+            }
+
+            // Set default active mode
+            setActiveMode('hinge');
+
+            // Add event listeners for mode buttons
+            function handleModeSwitch(mode) {
+                return function(event) {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    setActiveMode(mode);
+                };
+            }
+
+            hingeModeBtn.addEventListener('click', handleModeSwitch('hinge'));
+            elasticModeBtn.addEventListener('click', handleModeSwitch('elastic'));
+
+            // Mobile touch support for mode buttons
+            hingeModeBtn.addEventListener('touchend', function(event) {
+                const touchDuration = event.timeStamp - (event.changedTouches[0].startTime || 0);
+                if (touchDuration < 300) {
+                    handleModeSwitch('hinge')(event);
+                }
+            });
+
+            elasticModeBtn.addEventListener('touchend', function(event) {
+                const touchDuration = event.timeStamp - (event.changedTouches[0].startTime || 0);
+                if (touchDuration < 300) {
+                    handleModeSwitch('elastic')(event);
+                }
+            });
         });
     </script>
     <script src="app.js"></script>

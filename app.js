@@ -173,7 +173,7 @@ function initializeAmmo() {
     }
 
     Ammo().then((AmmoLibInstance) => {
-        console.log('✅ Ammo.js loaded successfully');
+        // console.log('✅ Ammo.js loaded successfully');
         // console.log('AmmoLib available:', !!AmmoLibInstance);
         // Store AmmoLib globally so all functions can access it
         AmmoLib = AmmoLibInstance;
@@ -192,6 +192,32 @@ function initializeAmmo() {
 
 // Start the initialization
 initializeAmmo();
+
+// Update solver settings based on current physics mode
+function updateSolverSettings() {
+    if (!physicsWorld) return;
+
+    const solverInfo = physicsWorld.getSolverInfo();
+
+    if (window.physicsMode === 'elastic') {
+        // Elastic mode: fewer iterations for more dynamic, less constrained physics
+        solverInfo.m_numIterations = 12; // Reduced from 20
+        solverInfo.m_erp = 0.6; // More flexible error correction
+        solverInfo.m_erp2 = 0.6; // More flexible constraint handling
+        solverInfo.m_globalCfm = 0.1; // Some constraint force mixing for elasticity
+    } else {
+        // Hinge mode: maximum iterations for rock-solid constraint stability
+        solverInfo.m_numIterations = 30; // Increased for maximum stability
+        solverInfo.m_erp = 0.9; // Ultra-precise error correction
+        solverInfo.m_erp2 = 0.9; // Maximum constraint handling
+        solverInfo.m_globalCfm = 0.0; // No constraint force mixing
+    }
+
+    // console.log(`🔧 Updated solver for ${window.physicsMode} mode: iterations=${solverInfo.m_numIterations}, erp=${solverInfo.m_erp}`);
+}
+
+// Make function globally available
+window.updateSolverSettings = updateSolverSettings;
 
 // Initialize physics world (only creates world, bodies created after GLTF loads)
 function initPhysics() {
@@ -227,12 +253,8 @@ function initPhysics() {
         // Set gravity (temporarily disabled for debugging hinge constraints)
         physicsWorld.setGravity(new AmmoLib.btVector3(0, 0, 0)); // DISABLED GRAVITY
 
-        // Configure solver for better constraint stability
-        const solverInfo = physicsWorld.getSolverInfo();
-        solverInfo.m_numIterations = 20; // Additional solver iterations
-        solverInfo.m_erp = 0.8; // Error reduction parameter
-        solverInfo.m_erp2 = 0.8; // Constraint ERP
-        solverInfo.m_globalCfm = 0.0; // Constraint force mixing
+        // Configure solver - will be updated based on physics mode
+        updateSolverSettings();
 
         // DEBUG: Check rigid body count
         // console.log('🔢 Physics world initialized with gravity:', physicsWorld.getGravity().y());
@@ -426,7 +448,7 @@ function findToyParts(object) {
         console.log(`📊 bodyMainRef contains ${torsoMeshes.length} meshes:`);
         torsoMeshes.forEach((meshInfo, index) => {
             const size = meshInfo.boundingBox.getSize(new THREE.Vector3());
-            console.log(`  ${index + 1}. "${meshInfo.name}": size(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}) at (${meshInfo.worldPosition.x.toFixed(2)}, ${meshInfo.worldPosition.y.toFixed(2)}, ${meshInfo.worldPosition.z.toFixed(2)})`);
+            // console.log(`  ${index + 1}. "${meshInfo.name}": size(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}) at (${meshInfo.worldPosition.x.toFixed(2)}, ${meshInfo.worldPosition.y.toFixed(2)}, ${meshInfo.worldPosition.z.toFixed(2)})`);
         });
 
         // Store torso meshes globally for collider creation
@@ -694,7 +716,11 @@ function createRigidBodies() {
         // Torso stays dynamic (not kinematic) - only limbs are kinematic for manual control
         // Set activation state and damping once at creation
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
-        rigidBodies.torso.setDamping(0.02, 0.02); // Physically sane damping for hinge motor control
+        if (window.physicsMode === 'elastic') {
+            rigidBodies.torso.setDamping(0.01, 0.01); // Lighter damping for elastic behavior
+        } else {
+            rigidBodies.torso.setDamping(0.02, 0.02); // Balanced damping for hinge stability
+        }
 
         // Store initial state for reset functionality
         initialStates.torso = {
@@ -731,12 +757,12 @@ function createRigidBodies() {
                               (size.x < 0.05 && size.y < 0.05 && size.z < 0.05 && !name.includes('stick'));
 
             if (shouldSkip) {
-                console.log(`⏭️ Skipping collision for irrelevant mesh: ${name} (size: ${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                // console.log(`⏭️ Skipping collision for irrelevant mesh: ${name} (size: ${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
                 return;
             }
 
             // Create collision shape that matches mesh geometry
-            console.log(`🔧 Creating collider for torso mesh "${name}"`);
+            // console.log(`🔧 Creating collider for torso mesh "${name}"`);
 
             let shape;
 
@@ -757,7 +783,7 @@ function createRigidBodies() {
                 const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
 
                 shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
-                console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+                // console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
 
             } else if (size.x / Math.max(size.y, size.z) > 3 ||
                        size.y / Math.max(size.x, size.z) > 3 ||
@@ -767,7 +793,7 @@ function createRigidBodies() {
                 const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
 
                 shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
-                console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+                // console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
 
             } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.15 ||
                        vertexCount < 10 ||
@@ -782,7 +808,7 @@ function createRigidBodies() {
                 );
 
                 shape = new AmmoLib.btBoxShape(halfExtents);
-                console.log(`    📦 Using box (skipping convex hull): size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), vertices=${vertexCount}`);
+                // console.log(`    📦 Using box (skipping convex hull): size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), vertices=${vertexCount}`);
             }
             try {
                 // Try to create convex hull shape from mesh geometry
@@ -846,7 +872,7 @@ function createRigidBodies() {
                 }
 
                 shape = convexShape;
-                console.log(`  ✅ Convex hull created with ${numPoints} points from ${vertexCount} vertices (${addedPoints} sampled)`);
+                // console.log(`  ✅ Convex hull created with ${numPoints} points from ${vertexCount} vertices (${addedPoints} sampled)`);
 
             } catch (error) {
                 // Fallback to multiple boxes or capsule if convex hull fails
@@ -860,7 +886,7 @@ function createRigidBodies() {
                     const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
                     const height = Math.max(size.x, size.y, size.z) - 2 * radius;
                     shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height));
-                    console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
+                    // console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
                 } else {
                     // Boxy shape - use oriented box
                     const padding = 0.02;
@@ -870,7 +896,7 @@ function createRigidBodies() {
                         (size.z * 0.5) + padding
                     );
                     shape = new AmmoLib.btBoxShape(halfExtents);
-                    console.log(`    📦 Using box: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                    // console.log(`    📦 Using box: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
                 }
             }
 
@@ -895,7 +921,7 @@ function createRigidBodies() {
 
             // Debug: Log collision shape type and basic info
             const shapeType = shape.constructor.name;
-            console.log(`  🎯 Added ${shapeType} collider for "${name}"`);
+            // console.log(`  🎯 Added ${shapeType} collider for "${name}"`);
 
             // Store for later position updates
             rigidBodies.torsoMeshColliders.push({
@@ -909,7 +935,7 @@ function createRigidBodies() {
             });
         });
 
-        console.log(`✅ Created ${rigidBodies.torsoMeshColliders.length} individual torso mesh colliders`);
+        // console.log(`✅ Created ${rigidBodies.torsoMeshColliders.length} individual torso mesh colliders`);
     }
 
     // Create limbs (arms and legs)
@@ -932,14 +958,14 @@ function createRigidBodies() {
         ref.getWorldQuaternion(worldQuat);
 
         // Create collision shape for limbs - use capsule for reliability
-        console.log(`🔧 Creating collider for limb mesh "${name}"`);
+        // console.log(`🔧 Creating collider for limb mesh "${name}"`);
 
         // For limbs, always use capsule for consistent, reliable physics
         // Limbs are typically cylindrical/rod-like shapes that work well with capsules
         const radius = 0.08;      // thickness of wooden limb
         const height = 1.2;       // length excluding caps
         const shape = new AmmoLib.btCapsuleShape(radius, height);
-        console.log(`    📏 Using capsule for limb: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
+        // console.log(`    📏 Using capsule for limb: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
 
         // Calculate local inertia
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
@@ -974,7 +1000,11 @@ function createRigidBodies() {
         };
 
         // Dynamic body setup - limbs must be dynamic from creation
-        rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
+        if (window.physicsMode === 'elastic') {
+            rigidBodies[name].setDamping(0.002, 0.005); // Very light damping for elastic drift
+        } else {
+            rigidBodies[name].setDamping(0.005, 0.01); // Balanced damping for hinge stability
+        }
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
         rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
@@ -989,7 +1019,7 @@ function createRigidBodies() {
         // Add limb to physics world with proper collision groups
         // Debug: Log collision shape type
         const shapeType = shape.constructor.name;
-        console.log(`  🎯 Added ${shapeType} collider for limb "${name}"`);
+        // console.log(`  🎯 Added ${shapeType} collider for limb "${name}"`);
 
         physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB | GROUP_TORSO_PART); // Limbs collide with other limbs and torso parts
     });
@@ -1164,9 +1194,14 @@ function createConstraints() {
             true
         );
 
-            // Set reasonable angle limits to prevent limbs from going through body
-            // Allow swinging motion but prevent extreme positions
-            hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.05, 0.05, 0.8); // ~135 degrees, softer constraints
+            // Set angle limits based on physics mode
+            if (window.physicsMode === 'elastic') {
+                // Elastic mode: more flexible, drifty behavior
+                hinge.setLimit(-Math.PI * 0.9, Math.PI * 0.9, 0.02, 0.02, 0.6); // ~162 degrees, very soft
+            } else {
+                // Hinge mode: constrained, stable behavior (default)
+                hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.05, 0.05, 0.8); // ~135 degrees, balanced
+            }
 
         // Add to physics world (disable collisions between connected bodies)
             physicsWorld.addConstraint(hinge, true);
@@ -1191,7 +1226,7 @@ function createConstraints() {
 
     // STEP 6: CREATE PIVOT COLLIDERS - Small bodies at joint locations to prevent detachment
     {
-        console.log('🔩 Creating pivot colliders to prevent limb detachment');
+        // console.log('🔩 Creating pivot colliders to prevent limb detachment');
 
         const pivotColliders = [
             { name: 'leftHandPivot', constraint: leftHandConstraint, limb: 'leftArm' },
@@ -1252,16 +1287,16 @@ function createConstraints() {
                 shapeType: 'btSphereShape'
             });
 
-            console.log(`  🔩 Added pivot collider "${name}" at (${jointPos.x.toFixed(3)}, ${jointPos.y.toFixed(3)}, ${jointPos.z.toFixed(3)})`);
+            // console.log(`  🔩 Added pivot collider "${name}" at (${jointPos.x.toFixed(3)}, ${jointPos.y.toFixed(3)}, ${jointPos.z.toFixed(3)})`);
         });
 
-        console.log(`✅ Created ${rigidBodies.pivotColliders.length} pivot colliders`);
+        // console.log(`✅ Created ${rigidBodies.pivotColliders.length} pivot colliders`);
     }
 }
 
 // Reset toy to initial state
 function resetToy() {
-    console.log('🔄 Resetting toy to initial state...');
+    // console.log('🔄 Resetting toy to initial state...');
 
     // Reset torso
     if (rigidBodies.torso && initialStates.torso) {
@@ -1313,7 +1348,7 @@ function resetToy() {
     mouseMoving = false;
     currentRotationDirection = 1;
 
-    console.log('✅ Toy reset complete');
+    // console.log('✅ Toy reset complete');
 }
 
 // Make reset function globally available
@@ -1363,6 +1398,11 @@ let physicsMeshMap = new Map();
 
 // Toy references are initialized when GLTF loads
 // console.log('Motor-based Ammo.js jumping jack initialized');
+
+// Display follow message in console
+console.log('🎨 Elastic Memory – becoming a Toymaker');
+console.log('👤 Follow valipokkann on Instagram: https://instagram.com/valiipokkann');
+console.log('🔗 GitHub: https://github.com/innovinitylabs/valipokkann-toymaker');
 
 // Mouse control state
 let mouseButtonDown = false;
@@ -1466,8 +1506,9 @@ function animate(currentTime = 0) {
                         // Limit angular velocity during spinning to prevent excessive speed
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 8.0) { // Reduced max speed for better constraint stability
-                            const scale = 8.0 / speed;
+                        const maxSpeed = window.physicsMode === 'elastic' ? 12.0 : 8.0;
+                        if (speed > maxSpeed) { // Mode-dependent max speed
+                            const scale = maxSpeed / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
@@ -1476,8 +1517,9 @@ function animate(currentTime = 0) {
                         }
                     }
 
-                    // Apply torque for controlled spinning
-                    const torque = 100.0 * currentRotationDirection;
+                    // Apply torque for controlled spinning (mode-dependent)
+                    const baseTorque = window.physicsMode === 'elastic' ? 120.0 : 100.0;
+                    const torque = baseTorque * currentRotationDirection;
                     rigidBodies.torso.applyTorque(new AmmoLib.btVector3(0, torque, 0));
 
                     // Check immediately after calling
@@ -1518,8 +1560,9 @@ function animate(currentTime = 0) {
                         // Also limit angular velocity to prevent excessive spin
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 10.0) { // Limit max rotation speed (reduced for stability)
-                            const scale = 10.0 / speed;
+                        const maxDecelSpeed = window.physicsMode === 'elastic' ? 15.0 : 10.0;
+                        if (speed > maxDecelSpeed) { // Mode-dependent max deceleration speed
+                            const scale = maxDecelSpeed / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
