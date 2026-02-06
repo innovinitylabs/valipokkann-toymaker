@@ -657,8 +657,9 @@ function createRigidBodies() {
         }
 
         // Torso stays dynamic (not kinematic) - only limbs are kinematic for manual control
-        // Set activation state
+        // Set activation state and damping once at creation
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
+        rigidBodies.torso.setDamping(0.02, 0.02); // Physically sane damping for hinge motor control
 
         // Add to physics world
         physicsWorld.addRigidBody(rigidBodies.torso, GROUP_TORSO, GROUP_LIMB); // Torso collides with limbs only
@@ -725,7 +726,7 @@ function createRigidBodies() {
         console.log(`✅ ${name} created as dynamic body (flags: ${flags})`);
 
         // Dynamic body setup - limbs must be dynamic from creation
-        rigidBodies[name].setDamping(0.1, 0.2); // Normal damping
+        rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
         rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
@@ -1068,50 +1069,42 @@ function animate(currentTime = 0) {
                 console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
             }
 
-            // Apply Y-axis rotation torque when mouse is clicked and dragged
-            if (rigidBodies.torso) {
-                // Apply sustained angular velocity for centrifugal force when mouse is clicked
-                if (rigidBodies.torso) {
-                    // Set damping to physically sane values (no conditionals)
-                    rigidBodies.torso.setDamping(0.02, 0.02);
+            // Control anchor↔torso hinge motor based on mouse input
+            if (constraints.spinHinge) {
+                if (mouseButtonDown) {
+                    // Enable motor with target angular speed (positive/negative based on direction)
+                    const targetAngularSpeed = 50.0 * currentRotationDirection;
+                    const maxMotorImpulse = 200.0; // Very high torque for strong centrifugal force
 
-                    // Apply sustained angular velocity when mouse is down
-                    if (mouseButtonDown) {
-                        const angularVelocityY = 50.0 * currentRotationDirection; // Much higher velocity for centrifugal force
+                    constraints.spinHinge.enableAngularMotor(true, targetAngularSpeed, maxMotorImpulse);
 
-                        // Set angular velocity directly (persistent spin)
-                        rigidBodies.torso.setAngularVelocity(
-                            new AmmoLib.btVector3(0, angularVelocityY, 0)
-                        );
-
-                    // DEBUG: Log occasionally
-                    // if (frameCount % 60 === 0) {
-                    //     console.log(`🔄 SET ANGULAR VELOCITY: ${angularVelocityY} (direction: ${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'})`);
-                    // }
+                    // DEBUG: Log motor activation
+                    if (frameCount % 60 === 0) {
+                        console.log(`🔄 HINGE MOTOR: enabled, speed=${targetAngularSpeed}, maxImpulse=${maxMotorImpulse}`);
                     }
+                } else {
+                    // Disable motor cleanly
+                    constraints.spinHinge.enableAngularMotor(false, 0, 0);
 
-                    // DEBUG: Check angular velocity periodically
-                    // if (frameCount % 60 === 0) {
-                    //     const angVel = rigidBodies.torso.getAngularVelocity();
-                    //     console.log(`🔄 AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
-                    // }
-
-                // Keep limbs lightly damped and aggressively active for centrifugal response
-                ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
-                    if (rigidBodies[name]) {
-                        rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
-                        rigidBodies[name].activate(true); // Aggressively keep limbs active
-                        rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
-
-                        // DEBUG: Log limb positions during spin
-                        if (mouseButtonDown && frameCount % 30 === 0) {
-                            const pos = rigidBodies[name].getWorldTransform().getOrigin();
-                            console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
-                        }
+                    // DEBUG: Log motor deactivation
+                    if (frameCount % 60 === 0) {
+                        console.log(`🔄 HINGE MOTOR: disabled`);
                     }
-                });
                 }
             }
+
+            // Keep limbs active for centrifugal response (no per-frame damping changes)
+            ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                if (rigidBodies[name]) {
+                    rigidBodies[name].activate(true); // Keep limbs active
+
+                    // DEBUG: Log limb positions during spin
+                    if (mouseButtonDown && frameCount % 30 === 0) {
+                        const pos = rigidBodies[name].getWorldTransform().getOrigin();
+                        console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
+                    }
+                }
+            });
 
             // Step real physics simulation
             try {
