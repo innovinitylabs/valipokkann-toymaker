@@ -596,7 +596,7 @@ function createRigidBodies() {
         );
         rigidBodies.anchor.setActivationState(4); // DISABLE_DEACTIVATION
 
-        physicsWorld.addRigidBody(rigidBodies.anchor);
+        physicsWorld.addRigidBody(rigidBodies.anchor, GROUP_TORSO, GROUP_TORSO); // Anchor collides with everything
         console.log('✅ Created static anchor body (kinematic, follows cursor)');
     }
 
@@ -658,7 +658,7 @@ function createRigidBodies() {
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
 
         // Add to physics world
-        physicsWorld.addRigidBody(rigidBodies.torso);
+        physicsWorld.addRigidBody(rigidBodies.torso, GROUP_TORSO, GROUP_LIMB); // Torso collides with limbs only
 
         // FAIL FAST: Validate physics authority
         validatePhysicsAuthority();
@@ -685,35 +685,26 @@ function createRigidBodies() {
         ref.getWorldPosition(worldPos);
         ref.getWorldQuaternion(worldQuat);
 
-        // Approximate box shape from bounds
-        const bbox = new THREE.Box3().setFromObject(ref);
-        const size = bbox.getSize(new THREE.Vector3());
+        // Use capsule colliders for limbs (wooden rod physics)
+        // Measure limb dimensions manually for realistic wooden toy behavior
+        const radius = 0.08;      // thickness of wooden limb
+        const height = 1.2;       // length excluding caps
 
-        // Debug: Validate size
-        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z) ||
-            size.x <= 0 || size.y <= 0 || size.z <= 0) {
-            console.error('❌ Invalid bounding box size for', name, ':', size.x, size.y, size.z);
-            return;
-        }
+        const shape = new AmmoLib.btCapsuleShape(radius, height);
 
-        // Shrink collision shapes significantly to prevent initial overlap
-        const shrink = 0.3; // 30% of original size for limbs (much more clearance)
-        const halfExtents = new AmmoLib.btVector3(
-            size.x * 0.5 * shrink,
-            size.y * 0.5 * shrink,
-            size.z * 0.5 * shrink
-        );
-
-        const shape = new AmmoLib.btBoxShape(halfExtents);
+        console.log(`🔧 Created capsule collider for ${name}: radius=${radius}, height=${height}`);
 
         // Calculate local inertia
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         shape.calculateLocalInertia(mass, localInertia);
 
-        // Create initial transform
+        // Create initial transform with proper capsule orientation
         const initialTransform = new AmmoLib.btTransform();
         initialTransform.setIdentity();
         initialTransform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+
+        // Rotate capsule to match limb direction (assuming limbs extend along Y-axis from shoulder/hip)
+        // Capsules are Y-aligned by default, so no additional rotation needed if limbs point up
         initialTransform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
 
         // Create motion state with initial transform
@@ -732,7 +723,13 @@ function createRigidBodies() {
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies[name].setSleepingThresholds(0, 0);
 
-        physicsWorld.addRigidBody(rigidBodies[name]);
+        // Wood-like physics properties
+        rigidBodies[name].setFriction(0.6);
+        rigidBodies[name].setRollingFriction(0.4);
+        rigidBodies[name].setSpinningFriction(0.4);
+        rigidBodies[name].setRestitution(0.05); // Wood barely bounces
+
+        physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB); // Limbs collide with other limbs only
     });
 
     console.log('📊 Rigid bodies summary:', {
@@ -918,6 +915,10 @@ let currentRotationDirection = 1; // 1 for clockwise, -1 for counterclockwise
 const MOTOR_TARGET_SPEED = 8.0; // Speed when clicking
 const MOTOR_MAX_TORQUE = 15.0;  // Torque limit
 
+// Collision groups for proper limb-torso separation
+const GROUP_TORSO = 1;
+const GROUP_LIMB = 2;
+
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
 const MIN_ZOOM_DISTANCE = 5; // Closest zoom distance
@@ -1053,14 +1054,20 @@ function animate(currentTime = 0) {
                         console.log(`🔄 AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
                     }
 
-                    // Keep limbs lightly damped and active for centrifugal response
-                    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
-                        if (rigidBodies[name]) {
-                            rigidBodies[name].setDamping(0.01, 0.02); // Very light damping
-                            rigidBodies[name].activate(true); // Keep limbs active
-                            rigidBodies[name].setSleepingThresholds(0, 0);
+        // Keep limbs lightly damped and active for centrifugal response
+                ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                    if (rigidBodies[name]) {
+                        rigidBodies[name].setDamping(0.01, 0.02); // Very light damping
+                        rigidBodies[name].activate(true); // Keep limbs active
+                        rigidBodies[name].setSleepingThresholds(0, 0);
+
+                        // DEBUG: Log limb positions during spin
+                        if (mouseButtonDown && frameCount % 60 === 0) {
+                            const pos = rigidBodies[name].getWorldTransform().getOrigin();
+                            console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
                         }
-                    });
+                    }
+                });
                 }
             }
 
