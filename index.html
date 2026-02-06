@@ -16,10 +16,19 @@
             overflow: hidden;
         }
 
-        #canvas {
+        #        canvas {
             display: block;
             width: 100vw;
             height: 100vh;
+            touch-action: none; /* Prevent default touch behaviors like scrolling */
+        }
+
+        /* Mobile canvas adjustments */
+        @media (max-width: 768px) {
+            canvas {
+                width: 100vw;
+                height: 100vh;
+            }
         }
 
         #instructions {
@@ -31,10 +40,29 @@
             padding: 15px;
             border-radius: 5px;
             font-size: 14px;
-            min-width: 320px;
-            max-width: min(500px, calc(100vw - 20px));
+            min-width: 280px;
+            max-width: min(450px, calc(100vw - 20px));
             cursor: pointer;
             transition: all 0.3s ease;
+        }
+
+        /* Mobile-specific adjustments */
+        @media (max-width: 768px) {
+            #instructions {
+                top: 5px;
+                left: 5px;
+                right: 5px;
+                min-width: auto;
+                max-width: calc(100vw - 10px);
+                padding: 10px;
+                font-size: 13px;
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                -khtml-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+            }
         }
 
         #instructions:hover {
@@ -42,9 +70,21 @@
         }
 
         #instructions.expanded {
-            max-width: min(800px, calc(100vw - 20px));
-            max-height: 80vh;
+            max-width: min(700px, calc(100vw - 20px));
+            max-height: 70vh;
             overflow-y: auto;
+        }
+
+        /* Mobile expanded state */
+        @media (max-width: 768px) {
+            #instructions.expanded {
+                max-width: calc(100vw - 10px);
+                max-height: 85vh;
+                left: 5px;
+                right: 5px;
+                padding: 15px;
+                z-index: 1000;
+            }
         }
 
         #instructions .short-desc {
@@ -57,12 +97,25 @@
             text-overflow: ellipsis;
         }
 
+        @media (max-width: 768px) {
+            #instructions .short-desc {
+                font-size: 14px;
+            }
+        }
+
         #instructions .description {
             font-size: 12px;
             line-height: 1.4;
             margin-bottom: 10px;
             text-align: justify;
             color: rgba(255, 255, 255, 0.9);
+        }
+
+        @media (max-width: 768px) {
+            #instructions .description {
+                font-size: 11px;
+                line-height: 1.5;
+            }
         }
 
         #instructions .full-desc {
@@ -80,12 +133,26 @@
             padding-bottom: 10px;
         }
 
+        @media (max-width: 768px) {
+            #instructions .full-desc h2 {
+                font-size: 20px;
+                margin-bottom: 15px;
+            }
+        }
+
         #instructions .full-desc h4 {
             font-size: 18px;
             font-weight: bold;
             margin: 25px 0 15px 0;
             border-top: 1px solid rgba(255,255,255,0.2);
             padding-top: 15px;
+        }
+
+        @media (max-width: 768px) {
+            #instructions .full-desc h4 {
+                font-size: 16px;
+                margin: 20px 0 12px 0;
+            }
         }
 
         #instructions .full-desc a {
@@ -209,7 +276,7 @@
                 console.error('💡 Try: Hard refresh (Ctrl+F5) or clear browser cache');
                 document.body.innerHTML = '<div style="color: red; font-size: 24px; text-align: center; margin-top: 100px;">❌ Ammo.js failed to load<br>Try: Hard refresh (Ctrl+F5) or clear browser cache</div>';
             } else {
-                console.log('✅ Ammo.js loaded successfully');
+                // console.log('✅ Ammo.js loaded successfully');
             }
         }, 1000);
 
