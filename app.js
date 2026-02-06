@@ -1084,7 +1084,7 @@ function animate(currentTime = 0) {
 
             // Control anchor↔torso hinge motor based on mouse input
             if (constraints.spinHinge) {
-                console.log(`🔗 spinHinge constraint exists: ${!!constraints.spinHinge}`);
+                // console.log(`🔗 spinHinge constraint exists: ${!!constraints.spinHinge}`);
                 if (mouseButtonDown) {
                     // TEMP: Try direct torque first to verify physics works
                     console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
