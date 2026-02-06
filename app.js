@@ -173,7 +173,7 @@ function initializeAmmo() {
     }
 
     Ammo().then((AmmoLibInstance) => {
-        console.log('✅ Ammo.js loaded successfully');
+        // console.log('✅ Ammo.js loaded successfully');
         // console.log('AmmoLib available:', !!AmmoLibInstance);
         // Store AmmoLib globally so all functions can access it
         AmmoLib = AmmoLibInstance;
@@ -213,7 +213,7 @@ function updateSolverSettings() {
         solverInfo.m_globalCfm = 0.0; // No constraint force mixing
     }
 
-    console.log(`🔧 Updated solver for ${window.physicsMode} mode: iterations=${solverInfo.m_numIterations}, erp=${solverInfo.m_erp}`);
+    // console.log(`🔧 Updated solver for ${window.physicsMode} mode: iterations=${solverInfo.m_numIterations}, erp=${solverInfo.m_erp}`);
 }
 
 // Make function globally available
@@ -448,7 +448,7 @@ function findToyParts(object) {
         console.log(`📊 bodyMainRef contains ${torsoMeshes.length} meshes:`);
         torsoMeshes.forEach((meshInfo, index) => {
             const size = meshInfo.boundingBox.getSize(new THREE.Vector3());
-            console.log(`  ${index + 1}. "${meshInfo.name}": size(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}) at (${meshInfo.worldPosition.x.toFixed(2)}, ${meshInfo.worldPosition.y.toFixed(2)}, ${meshInfo.worldPosition.z.toFixed(2)})`);
+            // console.log(`  ${index + 1}. "${meshInfo.name}": size(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}) at (${meshInfo.worldPosition.x.toFixed(2)}, ${meshInfo.worldPosition.y.toFixed(2)}, ${meshInfo.worldPosition.z.toFixed(2)})`);
         });
 
         // Store torso meshes globally for collider creation
@@ -757,12 +757,12 @@ function createRigidBodies() {
                               (size.x < 0.05 && size.y < 0.05 && size.z < 0.05 && !name.includes('stick'));
 
             if (shouldSkip) {
-                console.log(`⏭️ Skipping collision for irrelevant mesh: ${name} (size: ${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                // console.log(`⏭️ Skipping collision for irrelevant mesh: ${name} (size: ${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
                 return;
             }
 
             // Create collision shape that matches mesh geometry
-            console.log(`🔧 Creating collider for torso mesh "${name}"`);
+            // console.log(`🔧 Creating collider for torso mesh "${name}"`);
 
             let shape;
 
@@ -783,7 +783,7 @@ function createRigidBodies() {
                 const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
 
                 shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
-                console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+                // console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
 
             } else if (size.x / Math.max(size.y, size.z) > 3 ||
                        size.y / Math.max(size.x, size.z) > 3 ||
@@ -793,7 +793,7 @@ function createRigidBodies() {
                 const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
 
                 shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
-                console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+                // console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
 
             } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.15 ||
                        vertexCount < 10 ||
@@ -808,7 +808,7 @@ function createRigidBodies() {
                 );
 
                 shape = new AmmoLib.btBoxShape(halfExtents);
-                console.log(`    📦 Using box (skipping convex hull): size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), vertices=${vertexCount}`);
+                // console.log(`    📦 Using box (skipping convex hull): size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), vertices=${vertexCount}`);
             }
             try {
                 // Try to create convex hull shape from mesh geometry
@@ -872,7 +872,7 @@ function createRigidBodies() {
                 }
 
                 shape = convexShape;
-                console.log(`  ✅ Convex hull created with ${numPoints} points from ${vertexCount} vertices (${addedPoints} sampled)`);
+                // console.log(`  ✅ Convex hull created with ${numPoints} points from ${vertexCount} vertices (${addedPoints} sampled)`);
 
             } catch (error) {
                 // Fallback to multiple boxes or capsule if convex hull fails
@@ -886,7 +886,7 @@ function createRigidBodies() {
                     const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
                     const height = Math.max(size.x, size.y, size.z) - 2 * radius;
                     shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height));
-                    console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
+                    // console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
                 } else {
                     // Boxy shape - use oriented box
                     const padding = 0.02;
@@ -896,7 +896,7 @@ function createRigidBodies() {
                         (size.z * 0.5) + padding
                     );
                     shape = new AmmoLib.btBoxShape(halfExtents);
-                    console.log(`    📦 Using box: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                    // console.log(`    📦 Using box: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
                 }
             }
 
@@ -921,7 +921,7 @@ function createRigidBodies() {
 
             // Debug: Log collision shape type and basic info
             const shapeType = shape.constructor.name;
-            console.log(`  🎯 Added ${shapeType} collider for "${name}"`);
+            // console.log(`  🎯 Added ${shapeType} collider for "${name}"`);
 
             // Store for later position updates
             rigidBodies.torsoMeshColliders.push({
@@ -935,7 +935,7 @@ function createRigidBodies() {
             });
         });
 
-        console.log(`✅ Created ${rigidBodies.torsoMeshColliders.length} individual torso mesh colliders`);
+        // console.log(`✅ Created ${rigidBodies.torsoMeshColliders.length} individual torso mesh colliders`);
     }
 
     // Create limbs (arms and legs)
@@ -958,14 +958,14 @@ function createRigidBodies() {
         ref.getWorldQuaternion(worldQuat);
 
         // Create collision shape for limbs - use capsule for reliability
-        console.log(`🔧 Creating collider for limb mesh "${name}"`);
+        // console.log(`🔧 Creating collider for limb mesh "${name}"`);
 
         // For limbs, always use capsule for consistent, reliable physics
         // Limbs are typically cylindrical/rod-like shapes that work well with capsules
         const radius = 0.08;      // thickness of wooden limb
         const height = 1.2;       // length excluding caps
         const shape = new AmmoLib.btCapsuleShape(radius, height);
-        console.log(`    📏 Using capsule for limb: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
+        // console.log(`    📏 Using capsule for limb: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
 
         // Calculate local inertia
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
@@ -1019,7 +1019,7 @@ function createRigidBodies() {
         // Add limb to physics world with proper collision groups
         // Debug: Log collision shape type
         const shapeType = shape.constructor.name;
-        console.log(`  🎯 Added ${shapeType} collider for limb "${name}"`);
+        // console.log(`  🎯 Added ${shapeType} collider for limb "${name}"`);
 
         physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB | GROUP_TORSO_PART); // Limbs collide with other limbs and torso parts
     });
@@ -1226,7 +1226,7 @@ function createConstraints() {
 
     // STEP 6: CREATE PIVOT COLLIDERS - Small bodies at joint locations to prevent detachment
     {
-        console.log('🔩 Creating pivot colliders to prevent limb detachment');
+        // console.log('🔩 Creating pivot colliders to prevent limb detachment');
 
         const pivotColliders = [
             { name: 'leftHandPivot', constraint: leftHandConstraint, limb: 'leftArm' },
@@ -1287,16 +1287,16 @@ function createConstraints() {
                 shapeType: 'btSphereShape'
             });
 
-            console.log(`  🔩 Added pivot collider "${name}" at (${jointPos.x.toFixed(3)}, ${jointPos.y.toFixed(3)}, ${jointPos.z.toFixed(3)})`);
+            // console.log(`  🔩 Added pivot collider "${name}" at (${jointPos.x.toFixed(3)}, ${jointPos.y.toFixed(3)}, ${jointPos.z.toFixed(3)})`);
         });
 
-        console.log(`✅ Created ${rigidBodies.pivotColliders.length} pivot colliders`);
+        // console.log(`✅ Created ${rigidBodies.pivotColliders.length} pivot colliders`);
     }
 }
 
 // Reset toy to initial state
 function resetToy() {
-    console.log('🔄 Resetting toy to initial state...');
+    // console.log('🔄 Resetting toy to initial state...');
 
     // Reset torso
     if (rigidBodies.torso && initialStates.torso) {
@@ -1348,7 +1348,7 @@ function resetToy() {
     mouseMoving = false;
     currentRotationDirection = 1;
 
-    console.log('✅ Toy reset complete');
+    // console.log('✅ Toy reset complete');
 }
 
 // Make reset function globally available

@@ -381,12 +381,42 @@
                 font-size: 13px;
             }
         }
+
+        /* Follow message styling */
+        #followMessage {
+            transition: opacity 0.3s ease;
+        }
+
+        #followMessage:hover {
+            background: rgba(0,0,0,0.9);
+        }
+
+        #followMessage a:hover {
+            color: #ff6b9d;
+        }
+
+        /* Mobile responsive follow message */
+        @media (max-width: 768px) {
+            #followMessage {
+                top: 5px;
+                left: 5px;
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+        }
     </style>
 
     <!-- Mode selection buttons -->
     <div id="modeButtons" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 100;">
         <button id="hingeModeBtn" style="padding: 10px 20px; background: rgba(255,0,0,0.9); color: white; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">🔗 Hinge</button>
         <button id="elasticModeBtn" style="padding: 10px 20px; background: rgba(100,100,100,0.8); color: white; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">🌊 Elastic</button>
+    </div>
+
+    <!-- Clean follow message -->
+    <div id="followMessage" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-family: Arial, sans-serif; z-index: 100; border: 1px solid rgba(255,255,255,0.2);">
+        <a href="https://instagram.com/valiipokkann" target="_blank" style="color: #e1306c; text-decoration: none; font-weight: bold;">
+            Follow valipokkann on Instagram
+        </a>
     </div>
 
     <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; font-size: 16px;">
@@ -504,7 +534,7 @@
                     hingeModeBtn.style.borderColor = 'rgba(255,255,255,0.3)';
                 }
 
-                console.log(`🔄 Switched to ${mode} mode`);
+                // console.log(`🔄 Switched to ${mode} mode`);
 
                 // Update solver settings for the new mode
                 if (window.updateSolverSettings) {
