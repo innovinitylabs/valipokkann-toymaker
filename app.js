@@ -733,6 +733,16 @@ function createRigidBodies() {
 
             let shape;
 
+            // Get vertex count for decision making (defined early for use in conditionals)
+            let vertexCount = 0;
+            try {
+                if (mesh.geometry && mesh.geometry.attributes.position) {
+                    vertexCount = mesh.geometry.attributes.position.array.length / 3;
+                }
+            } catch (e) {
+                // Ignore errors, vertexCount remains 0
+            }
+
             // Special handling for different mesh types
             if (name.includes('stick')) {
                 // For sticks, use capsule for better physics on thin objects
