@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Ammo.js Jumping Jack Toy</title>
+    <title>Elastic Memory – becoming a Toymaker</title>
     <style>
         body {
             margin: 0;
@@ -28,21 +28,171 @@
             left: 10px;
             background: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 10px;
+            padding: 15px;
             border-radius: 5px;
             font-size: 14px;
-            max-width: 300px;
+            min-width: 320px;
+            max-width: min(500px, calc(100vw - 20px));
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #instructions:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        #instructions.expanded {
+            max-width: min(800px, calc(100vw - 20px));
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        #instructions .short-desc {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 8px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #instructions .description {
+            font-size: 12px;
+            line-height: 1.4;
+            margin-bottom: 10px;
+            text-align: justify;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        #instructions .full-desc {
+            display: none;
+            margin-top: 15px;
+            line-height: 1.6;
+        }
+
+        #instructions .full-desc h2 {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            padding-bottom: 10px;
+        }
+
+        #instructions .full-desc h4 {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 25px 0 15px 0;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            padding-top: 15px;
+        }
+
+        #instructions .full-desc a {
+            text-decoration: none;
+            transition: opacity 0.2s ease;
+        }
+
+        #instructions .full-desc a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+
+        #instructions.expanded .full-desc {
+            display: block;
+        }
+
+        #instructions .click-hint {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 10px;
+            font-style: italic;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <div id="instructions">
-        <strong>Ammo.js Motor-Based Jumping Jack:</strong><br>
-        • Mouse: move anchor point (tilts torso naturally)<br>
-        • Click: activate motor (spins torso via hinge motor)<br>
-        • Scroll wheel to zoom in/out<br>
-        • Real physics: gravity, rigid bodies, hinge motors!
+        <div class="short-desc">Elastic Memory – becoming a Toymaker</div>
+        <div class="description">
+            Elastic Memory is a physics-driven reinterpretation of a traditional jumping jack toy, inspired by an old elastic-connected version that aged unevenly with use. As the system spins faster, its limbs stretch and drift, temporarily losing alignment before returning as motion slows. This instability is intentional, echoing how real toys accumulated wear, imbalance, and character over time. The work exists between control and loss of control, treating physics not as a rulebook, but as a collaborator.
+        </div>
+        <div class="controls">
+            • Click & hold: alternates spin direction (clockwise ↔ counterclockwise)<br>
+            • Release mouse: stops spinning and toy comes to rest<br>
+            • Scroll wheel to zoom in/out<br>
+            • Real physics: gravity, rigid bodies, hinge constraints, centrifugal force!
+        </div>
+        <div class="click-hint">Click for artist statement</div>
+
+        <div class="full-desc">
+            <h2>Elastic Memory – becoming a Toymaker</h2>
+
+            <h4>Mode: Elastic Memory</h4>
+
+            <p>This work reimagines the traditional jumping jack toy as a living mechanical system rather than a perfect machine.</p>
+
+            <p>Unlike rigid, idealized hinges, this version embraces instability. At higher rotational speeds, the limbs stretch, drift, and momentarily lose alignment with the torso, only to return as motion slows. This behavior is intentional. It echoes a lesser-known variant of the toy, where limbs were connected using elastic instead of pins. Over time, those elastics would fatigue, stretch unevenly, and respond imperfectly to force.</p>
+
+            <p>The result was never symmetry, never precision, but character.</p>
+
+            <p>Here, physics is allowed to misbehave slightly. Constraints soften under stress. Motion leaves behind residue. What appears as a glitch is closer to how old toys actually aged in the real world, shaped by repeated handling, material decay, and misuse.</p>
+
+            <p>The piece sits between control and loss of control.<br>
+            Spin it gently and it behaves.<br>
+            Push it harder and the system reveals its limits.</p>
+
+            <p>This is not nostalgia as an image.<br>
+            It is nostalgia as behavior.</p>
+
+            <h4>Personal Memory</h4>
+
+            <p>I do not remember ever being bought a jumping jack toy.</p>
+
+            <p>What I remember instead is finding one.<br>
+            Broken. Old. Probably from my grandmother's home.</p>
+
+            <p>It was the elastic version. The elastic had lost most of its strength. One limb was missing, if I remember correctly. It never moved the way it was supposed to, and yet it stayed with me far longer than any intact toy.</p>
+
+            <p>This work is built around that memory.<br>
+            Not how the toy was designed to work, but how it survived.</p>
+
+            <h4>Modes (Planned / Experimental)</h4>
+
+            <p><strong>Elastic Mode (current)</strong><br>
+            Limbs respond dynamically to force, stretch under speed, and recover over time. Imperfect, organic, memory-based motion.</p>
+
+            <p><strong>Rigid Mode (planned)</strong><br>
+            A mechanically "correct" version with reinforced hinges and strict constraints, closer to a textbook simulation.</p>
+
+            <p><strong>Mirror Mode (planned)</strong><br>
+            Uses camera or body movement to influence direction and motion, turning the toy into a physical echo of the viewer.</p>
+
+            <h4>Artist Note</h4>
+
+            <p>I am less interested in how toys were supposed to work, and more interested in how they actually did after years of use. This project treats physics not as a rulebook, but as a collaborator.</p>
+
+            <h4>Attribution & Ethics</h4>
+
+            <p>This character is based on "The Toymaker" by Amrit Pal Singh.</p>
+
+            <p>This artwork was entirely created by me as an original interpretation for a public art challenge. The underlying character and intellectual property belong to Amrit Pal Singh and are used here with attribution and respect.</p>
+
+            <p>This work is non-commercial and created in the spirit of the competition.</p>
+
+            <h4>Credits & Links</h4>
+
+            <p><strong>Artist:</strong><br>
+            VALIPOKKANN (வழிப்போக்கன்)<br>
+            <a href="https://instagram.com/valiipokkann" target="_blank" style="color: #e1306c;">Instagram: @valiipokkann (follow me)</a><br>
+            <a href="https://twitter.com/valipokkann" target="_blank" style="color: #1da1f2;">Twitter: @valipokkann</a><br>
+            <a href="https://valipokkann.in" target="_blank" style="color: #ffffff;">Website: valipokkann.in</a></p>
+
+            <p><strong>Original Character:</strong><br>
+            "The Toymaker" by Amrit Pal Singh<br>
+            <a href="https://instagram.com/amritpaldesign" target="_blank" style="color: #e1306c;">Instagram: @amritpaldesign</a></p>
+        </div>
     </div>
     <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; font-size: 16px;">
         Loading Ammo.js physics engine...
@@ -62,6 +212,23 @@
                 console.log('✅ Ammo.js loaded successfully');
             }
         }, 1000);
+
+        // Handle expandable description
+        document.addEventListener('DOMContentLoaded', function() {
+            const instructions = document.getElementById('instructions');
+
+            instructions.addEventListener('click', function() {
+                instructions.classList.toggle('expanded');
+            });
+
+            // Prevent scroll events from bubbling to canvas when description is expanded
+            instructions.addEventListener('wheel', function(event) {
+                if (instructions.classList.contains('expanded')) {
+                    // Stop propagation for all wheel events when expanded - more reliable
+                    event.stopPropagation();
+                }
+            }, { passive: false });
+        });
     </script>
     <script src="app.js"></script>
 </body>
