@@ -1084,12 +1084,22 @@ function animate(currentTime = 0) {
 
             // Control anchor↔torso hinge motor based on mouse input
             if (constraints.spinHinge) {
+                console.log(`🔗 spinHinge constraint exists: ${!!constraints.spinHinge}`);
                 if (mouseButtonDown) {
-                    // Enable motor with target angular speed (positive/negative based on direction)
-                    const targetAngularSpeed = 50.0 * currentRotationDirection;
-                    const maxMotorImpulse = 500.0; // Extremely high torque to overcome torso inertia
+                    // TEMP: Try direct torque first to verify physics works
+                    console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
+                    const torque = 100.0 * currentRotationDirection; // Direct torque
+                    rigidBodies.torso.applyTorque(new AmmoLib.btVector3(0, torque, 0));
+                    console.log(`✅ Applied direct torque: ${torque}`);
 
-                    constraints.spinHinge.enableAngularMotor(true, targetAngularSpeed, maxMotorImpulse);
+                    // Check immediately after calling
+                    setTimeout(() => {
+                        if (rigidBodies.torso) {
+                            const angVel = rigidBodies.torso.getAngularVelocity();
+                            const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
+                            console.log(`🔄 IMMEDIATE CHECK: Angular velocity (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)}) speed=${speed.toFixed(3)}`);
+                        }
+                    }, 10);
 
                     // VERIFY ANGULAR VELOCITY - hard failure check
                     setTimeout(() => {
