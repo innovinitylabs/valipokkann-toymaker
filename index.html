@@ -220,6 +220,18 @@
             instructions.addEventListener('click', function() {
                 instructions.classList.toggle('expanded');
             });
+
+            // Prevent scroll events from bubbling to canvas when scrolling the description
+            instructions.addEventListener('wheel', function(event) {
+                if (instructions.classList.contains('expanded')) {
+                    // Only prevent bubbling if we're actually scrolling the description content
+                    // Check if the scroll would move the content
+                    const scrollable = event.target.closest('.full-desc');
+                    if (scrollable && (scrollable.scrollTop > 0 || event.deltaY > 0)) {
+                        event.stopPropagation();
+                    }
+                }
+            }, { passive: false });
         });
     </script>
     <script src="app.js"></script>
