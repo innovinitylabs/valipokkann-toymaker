@@ -1014,7 +1014,7 @@ function animate(currentTime = 0) {
                 currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 1.5;
 
                 // Apply torques to tilt torso based on mouse position
-                const torqueScale = 15.0; // Stronger torque for visible tilting
+                const torqueScale = 25.0; // Even stronger torque for testing
                 const torqueX = currentAnchorX * torqueScale; // Tilt around X-axis
                 const torqueZ = currentAnchorZ * torqueScale; // Tilt around Z-axis
 
@@ -1023,8 +1023,16 @@ function animate(currentTime = 0) {
                     new AmmoLib.btVector3(torqueX, 0, torqueZ)
                 );
 
-                // Set moderate damping for controlled motion (not too much)
-                rigidBodies.torso.setDamping(0.1, 0.3); // Linear, angular damping
+                // DEBUG: Check angular velocity after applying torque
+                if (Math.abs(torqueX) > 1 || Math.abs(torqueZ) > 1) {
+                    const angVel = rigidBodies.torso.getAngularVelocity();
+                    if (frameCount % 30 === 0) { // Throttle logging
+                        console.log(`🔄 Torque applied: (${torqueX.toFixed(2)}, 0, ${torqueZ.toFixed(2)}) | AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
+                    }
+                }
+
+                // TEMPORARY: Disable damping to test if it's preventing motion
+                rigidBodies.torso.setDamping(0.0, 0.0); // No damping for testing
 
                 // TEMPORARILY DISABLE velocity clearing to test if motion works
                 /*
@@ -1101,6 +1109,11 @@ function syncPhysicsToThree() {
                 // Sync to the group - groups handle hierarchical transforms correctly
                 bodyMainRef.position.set(p.x(), p.y(), p.z());
                 bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
+
+                // DEBUG: Log torso rotation occasionally
+                if (frameCount % 60 === 0) { // Every second
+                    console.log(`🔄 Torso visual: pos(${p.x().toFixed(2)}, ${p.y().toFixed(2)}, ${p.z().toFixed(2)}) rot(${q.x().toFixed(3)}, ${q.y().toFixed(3)}, ${q.z().toFixed(3)}, ${q.w().toFixed(3)})`);
+                }
             } catch (e) {
                 console.error('❌ Error getting torso transform:', e);
                 return;
