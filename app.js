@@ -294,10 +294,10 @@ function initScene() {
             // 🔧 PHYSICS CONTROL: Detach limbs to world space for independent physics sync
             if (bodyMainRef) {
                 // Detach arms to world space (required for physics sync)
-                if (leftArmRef) scene.attach(leftArmRef);
-                if (rightArmRef) scene.attach(rightArmRef);
-                if (leftLegRef) scene.attach(leftLegRef);
-                if (rightLegRef) scene.attach(rightLegRef);
+            if (leftArmRef) scene.attach(leftArmRef);
+            if (rightArmRef) scene.attach(rightArmRef);
+            if (leftLegRef) scene.attach(leftLegRef);
+            if (rightLegRef) scene.attach(rightLegRef);
 
             }
 
@@ -323,12 +323,8 @@ function initScene() {
 
                     // Limbs are already dynamic from creation - no kinematic switching needed
 
-                    // Enable physics simulation after a brief delay to let everything settle
-                    setTimeout(() => {
-                        console.log('🌍 Enabling physics simulation');
-                        physicsEnabled = true;
-                        physicsEnableTime = performance.now();
-                    }, 200); // 200ms delay after gravity is enabled
+                    // Enable gravity for realistic physics
+                    physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
                     
                     // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
                     physicsMeshMap = new Map();
@@ -823,13 +819,9 @@ function createRigidBodies() {
                     convexShape.optimizeConvexHull();
                 }
 
-                // Basic validation - check if convexShape was created successfully
-                if (!convexShape || typeof convexShape.addPoint !== 'function') {
-                    throw new Error('Convex hull creation failed - invalid shape object');
-                }
-
+                // Basic validation - ensure convex hull was created successfully
                 shape = convexShape;
-                console.log(`  ✅ Convex hull created from ${vertexCount} vertices (${addedPoints} sampled)`);
+                console.log(`  ✅ Convex hull created with sampled vertices from ${vertexCount} total`);
 
             } catch (error) {
                 // Fallback to multiple boxes or capsule if convex hull fails
@@ -883,7 +875,7 @@ function createRigidBodies() {
             // Store for later position updates
             rigidBodies.torsoMeshColliders.push({
                 body: colliderBody,
-                mesh: mesh,
+                mesh: mesh, // Use original mesh for transform updates
                 name: name,
                 initialPosition: worldPosition.clone(),
                 initialQuaternion: worldQuaternion.clone(),
@@ -915,28 +907,29 @@ function createRigidBodies() {
         ref.getWorldQuaternion(worldQuat);
 
         // Create collision shape that matches limb mesh geometry
-        console.log(`🔧 Creating collider for limb mesh "${name}"`);
+        console.log(`🔧 Creating collider for limb "${name}"`);
 
         let shape;
         try {
-            // Find the actual mesh geometry (limb refs might be groups)
-            let geometry = null;
-            if (ref.geometry) {
-                // Direct mesh
-                geometry = ref.geometry;
-            } else if (ref.children) {
-                // Group - find first mesh child
-                for (const child of ref.children) {
-                    if (child.isMesh && child.geometry) {
-                        geometry = child.geometry;
-                        break;
+            // Find the actual mesh with geometry (limb refs might be groups)
+            let meshWithGeometry = ref;
+
+            // If ref is a group, find the first mesh child with geometry
+            if (ref && ref.isGroup && !ref.geometry) {
+                ref.traverse((child) => {
+                    if (child.isMesh && child.geometry && child.geometry.attributes.position && !meshWithGeometry.geometry) {
+                        meshWithGeometry = child;
                     }
-                }
+                });
             }
 
-            if (!geometry) {
-                throw new Error('Could not find geometry in limb reference');
+            // Ensure we have a mesh with geometry
+            if (!meshWithGeometry || !meshWithGeometry.geometry) {
+                throw new Error('No mesh with geometry found');
             }
+
+            // Create convex hull shape from mesh geometry
+            const geometry = meshWithGeometry.geometry;
 
             // Ensure geometry has positions
             if (!geometry.attributes.position) {
@@ -989,13 +982,9 @@ function createRigidBodies() {
                 convexShape.optimizeConvexHull();
             }
 
-            // Basic validation - check if convexShape was created successfully
-            if (!convexShape || typeof convexShape.addPoint !== 'function') {
-                throw new Error('Convex hull creation failed - invalid shape object');
-            }
-
+            // Basic validation - ensure convex hull was created successfully
             shape = convexShape;
-            console.log(`  ✅ Limb convex hull created from ${vertexCount} vertices (${addedPoints} sampled)`);
+            console.log(`  ✅ Limb convex hull created with sampled vertices from ${vertexCount} total`);
 
         } catch (error) {
             // Fallback to capsule if convex hull fails
@@ -1037,7 +1026,8 @@ function createRigidBodies() {
         initialStates[name] = {
             position: worldPos.clone(),
             quaternion: worldQuat.clone(),
-            transform: initialTransform
+            transform: initialTransform,
+            visualRef: ref // Store original ref for visual updates
         };
 
         // Dynamic body setup - limbs must be dynamic from creation
@@ -1219,24 +1209,24 @@ function createConstraints() {
 
         try {
             // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
-            const hinge = new AmmoLib.btHingeConstraint(
-                rigidBodies.torso,
-                body,
-                pivotA,
-                pivotB,
+        const hinge = new AmmoLib.btHingeConstraint(
+            rigidBodies.torso,
+            body,
+            pivotA,
+            pivotB,
                 new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis (forward axis)
-                new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
-                true
-            );
+            new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
+            true
+        );
 
             // Disable angle limits to allow free rotation (important for centrifugal force!)
             hinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.01, 0.01, 1.0); // Very soft limits - minimal resistance
 
-            // Add to physics world (disable collisions between connected bodies)
+        // Add to physics world (disable collisions between connected bodies)
             physicsWorld.addConstraint(hinge, true);
 
-            // Store constraint
-            constraints[name] = hinge;
+        // Store constraint
+        constraints[name] = hinge;
 
             // console.log(`✅ Successfully created and added hinge constraint for ${name}`);
 
@@ -1349,10 +1339,7 @@ function resetToy() {
     const limbNames = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
     limbNames.forEach(name => {
         if (rigidBodies[name] && initialStates[name]) {
-            const { position, quaternion, transform } = initialStates[name];
-            const ref = name === 'leftArm' ? leftArmRef :
-                       name === 'rightArm' ? rightArmRef :
-                       name === 'leftLeg' ? leftLegRef : rightLegRef;
+            const { position, quaternion, transform, visualRef } = initialStates[name];
 
             // Reset physics body
             rigidBodies[name].setWorldTransform(transform);
@@ -1362,9 +1349,9 @@ function resetToy() {
             rigidBodies[name].setActivationState(1); // ACTIVE_TAG to wake up
 
             // Reset Three.js mesh
-            if (ref) {
-                ref.position.copy(position);
-                ref.quaternion.copy(quaternion);
+            if (visualRef) {
+                visualRef.position.copy(position);
+                visualRef.quaternion.copy(quaternion);
             }
         }
     });
@@ -1427,10 +1414,6 @@ let physicsMeshMap = new Map();
 
 // Toy references are initialized when GLTF loads
 // console.log('Motor-based Ammo.js jumping jack initialized');
-
-// Physics startup control
-let physicsEnabled = false;
-let physicsEnableTime = 0;
 
 // Mouse control state
 let mouseButtonDown = false;
@@ -1580,7 +1563,7 @@ function animate(currentTime = 0) {
                     constraints.spinHinge.enableAngularMotor(false, 0, 0);
 
                     // Apply very strong damping to bring toy to rest when mouse is released
-                    if (rigidBodies.torso) {
+        if (rigidBodies.torso) {
                         rigidBodies.torso.setDamping(0.95, 0.98); // Very strong damping to stop very quickly
 
                         // Also limit angular velocity to prevent excessive spin
@@ -1624,10 +1607,7 @@ function animate(currentTime = 0) {
 
             // Step real physics simulation
             try {
-                // Only run physics simulation if enabled and after initial stabilization period
-                if (physicsEnabled && (performance.now() - physicsEnableTime) > 100) { // 100ms buffer
-                    physicsWorld.stepSimulation(delta, 10);
-                }
+                physicsWorld.stepSimulation(delta, 10);
 
                 // DEBUG: Check if constraints are being processed
                 // if (frameCount % 120 === 0) {
