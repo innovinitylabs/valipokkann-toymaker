@@ -1695,9 +1695,11 @@ function syncPhysicsToThree() {
                     // if (mouseButtonDown && frameCount % 120 === 0) {
                     //     console.log(`${name}: pos(${p.x().toFixed(2)}, ${p.y().toFixed(2)}, ${p.z().toFixed(2)})`);
                     // }
-                } catch (e) {
-                    console.error(`❌ Error getting ${name} transform:`, e);
+                } else {
+                    console.warn(`⚠️ ${name} motion state is null or invalid`);
                 }
+            } catch (e) {
+                console.error(`❌ Error getting ${name} transform:`, e);
             }
         }
     });
