@@ -1082,10 +1082,8 @@ function animate(currentTime = 0) {
                 console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
             }
 
-            // Control anchor↔torso hinge motor based on mouse input
-            if (constraints.spinHinge) {
-                console.log(`🔗 spinHinge constraint exists: ${!!constraints.spinHinge}`);
-                if (mouseButtonDown) {
+            // Apply direct torque to torso for rotation
+            if (mouseButtonDown) {
                     // TEMP: Try direct torque first to verify physics works
                     console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
                     const torque = 100.0 * currentRotationDirection; // Direct torque
@@ -1115,17 +1113,9 @@ function animate(currentTime = 0) {
                         }
                     }, 100); // Check after physics has a chance to respond
 
-                    // DEBUG: Log motor activation
+                    // DEBUG: Log direct torque
                     if (frameCount % 60 === 0) {
-                        console.log(`🔄 HINGE MOTOR: enabled, speed=${targetAngularSpeed}, maxImpulse=${maxMotorImpulse}`);
-                    }
-                } else {
-                    // Disable motor cleanly
-                    constraints.spinHinge.enableAngularMotor(false, 0, 0);
-
-                    // DEBUG: Log motor deactivation
-                    if (frameCount % 60 === 0) {
-                        console.log(`🔄 HINGE MOTOR: disabled`);
+                        console.log(`🔄 DIRECT TORQUE: applied ${100.0 * currentRotationDirection}`);
                     }
                 }
             }
