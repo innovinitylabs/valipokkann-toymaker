@@ -193,6 +193,32 @@ function initializeAmmo() {
 // Start the initialization
 initializeAmmo();
 
+// Update solver settings based on current physics mode
+function updateSolverSettings() {
+    if (!physicsWorld) return;
+
+    const solverInfo = physicsWorld.getSolverInfo();
+
+    if (window.physicsMode === 'elastic') {
+        // Elastic mode: fewer iterations for more dynamic, less constrained physics
+        solverInfo.m_numIterations = 12; // Reduced from 20
+        solverInfo.m_erp = 0.6; // More flexible error correction
+        solverInfo.m_erp2 = 0.6; // More flexible constraint handling
+        solverInfo.m_globalCfm = 0.1; // Some constraint force mixing for elasticity
+    } else {
+        // Hinge mode: more iterations for stable, constrained physics
+        solverInfo.m_numIterations = 20; // Full iterations for stability
+        solverInfo.m_erp = 0.8; // Precise error correction
+        solverInfo.m_erp2 = 0.8; // Tight constraint handling
+        solverInfo.m_globalCfm = 0.0; // No constraint force mixing
+    }
+
+    console.log(`🔧 Updated solver for ${window.physicsMode} mode: iterations=${solverInfo.m_numIterations}, erp=${solverInfo.m_erp}`);
+}
+
+// Make function globally available
+window.updateSolverSettings = updateSolverSettings;
+
 // Initialize physics world (only creates world, bodies created after GLTF loads)
 function initPhysics() {
     // ASSERT AMMO IS REAL
@@ -227,12 +253,8 @@ function initPhysics() {
         // Set gravity (temporarily disabled for debugging hinge constraints)
         physicsWorld.setGravity(new AmmoLib.btVector3(0, 0, 0)); // DISABLED GRAVITY
 
-        // Configure solver for better constraint stability
-        const solverInfo = physicsWorld.getSolverInfo();
-        solverInfo.m_numIterations = 20; // Additional solver iterations
-        solverInfo.m_erp = 0.8; // Error reduction parameter
-        solverInfo.m_erp2 = 0.8; // Constraint ERP
-        solverInfo.m_globalCfm = 0.0; // Constraint force mixing
+        // Configure solver - will be updated based on physics mode
+        updateSolverSettings();
 
         // DEBUG: Check rigid body count
         // console.log('🔢 Physics world initialized with gravity:', physicsWorld.getGravity().y());

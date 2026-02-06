@@ -506,6 +506,11 @@
 
                 console.log(`🔄 Switched to ${mode} mode`);
 
+                // Update solver settings for the new mode
+                if (window.updateSolverSettings) {
+                    window.updateSolverSettings();
+                }
+
                 // Reset toy when switching modes to ensure clean state
                 if (window.resetToy) {
                     setTimeout(() => window.resetToy(), 100);
