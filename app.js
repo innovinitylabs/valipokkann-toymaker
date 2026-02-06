@@ -757,9 +757,11 @@ function createRigidBodies() {
         ref.getWorldPosition(worldPos);
         ref.getWorldQuaternion(worldQuat);
 
+        console.log(`Creating limb ${name} at position: (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
+
         // Use capsule colliders for limbs (wooden rod physics)
         // Measure limb dimensions manually for realistic wooden toy behavior
-        const radius = 0.06;      // slightly reduced for better visual thickness match
+        const radius = 0.12;      // TEMP: increased for testing collision
         const height = 1.2;       // length excluding caps
 
         const shape = new AmmoLib.btCapsuleShape(radius, height);
@@ -806,7 +808,14 @@ function createRigidBodies() {
             console.warn(`Could not set physics properties for ${name}:`, e.message);
         }
 
-        physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB | GROUP_TORSO_PART); // Limbs collide with other limbs and torso parts
+        // DEBUG: Test limb-to-limb collision
+        console.log(`Adding limb ${name} to physics world: group=${GROUP_LIMB}, mask=${GROUP_LIMB | GROUP_TORSO_PART}`);
+        console.log(`Limb ${name} created with mass=${mass}, radius=${radius}, height=${height}`);
+        // TEMP: Disable collision groups to test if collision detection works at all
+        physicsWorld.addRigidBody(rigidBodies[name], 1, -1); // Belong to group 1, collide with everything
+
+        // TEMP: Force collision by setting mask to collide with everything
+        // physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, -1); // Collide with all groups
     });
 
     // FINAL SAFETY CHECK: Ensure limbs are dynamic, not kinematic
