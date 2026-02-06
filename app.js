@@ -178,6 +178,10 @@ function initializeAmmo() {
         // Store AmmoLib globally so all functions can access it
         AmmoLib = AmmoLibInstance;
         console.log('AmmoLib assigned, btVector3 available:', !!AmmoLib.btVector3);
+
+        // Hide loading overlay after Ammo initializes
+        hideLoading();
+
         initPhysics();
         initScene();
         animate();
@@ -336,11 +340,8 @@ function initScene() {
                 console.error('❌ Cannot create physics bodies - bodyMainRef or physicsWorld missing');
             }
 
-            // Hide loading indicator
-            const loadingEl = document.getElementById('loading');
-            if (loadingEl) {
-                loadingEl.style.display = 'none';
-            }
+            // Hide loading overlay (backup call in case Ammo load didn't trigger it)
+            hideLoading();
 
             console.log('GLTF loaded successfully');
             console.log('Toy hierarchy:', toyGroupRef);
@@ -763,39 +764,40 @@ function createRigidBodies() {
 function createConstraints() {
     console.log('🚀 createConstraints() called');
 
-    // Validate that we have the required bodies
+    // FAIL-FAST VALIDATION: Throw errors instead of silent returns
     if (!rigidBodies.torso) {
-        console.error('❌ No torso body found!');
-        return;
+        throw new Error('❌ CRITICAL: No torso body found - physics graph incomplete!');
     }
 
-    console.log('📊 Available rigid bodies:', Object.keys(rigidBodies).filter(key => rigidBodies[key]));
-    console.log('🔗 Creating motor-based hinge constraint...');
-
     if (!AmmoLib) {
-        console.error('❌ Cannot create constraints - AmmoLib not loaded');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - AmmoLib not loaded!');
     }
 
     if (!physicsWorld) {
-        console.error('❌ Cannot create constraints - physicsWorld not initialized');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - physicsWorld not initialized!');
     }
 
-    if (!rigidBodies.anchor || !rigidBodies.torso) {
-        console.error('❌ Cannot create constraints - anchor or torso body missing');
-        return;
+    if (!rigidBodies.anchor) {
+        throw new Error('❌ CRITICAL: Cannot create constraints - anchor body missing!');
     }
 
     if (!jointEmptyRef) {
-        console.error('❌ Cannot create constraints - joint Empty not found');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - joint Empty not found!');
     }
 
     if (!bodyMainRef) {
-        console.error('❌ Cannot create constraints - bodyMainRef not found');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - bodyMainRef not found!');
     }
+
+    // Validate all limb rigid bodies exist
+    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+        if (!rigidBodies[name]) {
+            throw new Error(`❌ CRITICAL: ${name} rigid body missing - articulated physics impossible!`);
+        }
+    });
+
+    console.log('📊 Available rigid bodies:', Object.keys(rigidBodies).filter(key => rigidBodies[key]));
+    console.log('🔗 Creating motor-based hinge constraint...');
 
     // STEP 5: ANCHOR ↔ TORSO HINGE - ENABLED TO KEEP TORSO IN FRAME WITH GRAVITY
     // Compute jointWorld from Blender Empty
@@ -848,9 +850,11 @@ function createConstraints() {
 
 
     limbConstraints.forEach(({ name, ref, body, joint }) => {
-        if (!body || !ref) {
-            console.log(`❌ Skipping ${name} - body or ref missing`);
-            return;
+        if (!body) {
+            throw new Error(`❌ CRITICAL: ${name} rigid body missing - cannot create hinge constraint!`);
+        }
+        if (!ref) {
+            throw new Error(`❌ CRITICAL: ${name} Three.js reference missing - cannot create hinge constraint!`);
         }
 
         console.log(`🔧 Creating constraint for ${name}...`);
@@ -920,6 +924,14 @@ function createConstraints() {
             console.error(`❌ Failed to create hinge constraint for ${name}:`, error);
         }
     });
+
+    // ENSURE CONSTRAINTS ARE ALWAYS CREATED - No silent failures
+    if (Object.keys(constraints).length === 0) {
+        throw new Error("❌ CRITICAL: NO CONSTRAINTS CREATED — PHYSICS GRAPH IS BROKEN!");
+    }
+
+    console.log(`✅ CONSTRAINTS CREATED: ${Object.keys(constraints).length} total`);
+    console.log("CONSTRAINT GRAPH:", Object.keys(constraints));
 }
 
 // Mouse interaction variables
@@ -935,6 +947,17 @@ const MOTOR_MAX_TORQUE = 15.0;  // Torque limit
 // Collision groups for proper limb-torso separation
 const GROUP_TORSO = 1;
 const GROUP_LIMB = 2;
+
+// Loading overlay management
+function hideLoading() {
+    const el = document.getElementById("loading");
+    if (el) {
+        el.style.display = "none";
+        console.log("✅ Loading overlay hidden");
+    } else {
+        console.warn("⚠️ Loading element not found");
+    }
+}
 
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
@@ -1094,12 +1117,7 @@ function animate(currentTime = 0) {
 
                 // DEBUG: Check if constraints are being processed
                 if (frameCount % 120 === 0) {
-                    try {
-                        const numConstraints = physicsWorld.getNumConstraints();
-                        console.log(`🔗 Physics world has ${numConstraints} constraints`);
-                    } catch (e) {
-                        console.log('🔗 Could not get constraint count');
-                    }
+                    console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
                 }
             } catch (e) {
                 console.error('❌ Physics step failed:', e);
