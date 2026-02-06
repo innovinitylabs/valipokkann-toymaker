@@ -312,8 +312,8 @@ function initScene() {
                         }
                     });
 
-                    // Re-enable gravity now that constraints are established
-                    physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
+                    // Keep gravity disabled for testing torso rotation without falling
+                    // physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
                     
                     // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
                     physicsMeshMap = new Map();
@@ -772,8 +772,7 @@ function createConstraints() {
         return;
     }
 
-    // STEP 5: ANCHOR ↔ TORSO HINGE - TEMPORARILY DISABLED FOR TESTING
-    /*
+    // STEP 5: ANCHOR ↔ TORSO HINGE - RE-ENABLED
     // Compute jointWorld from Blender Empty
     const jointWorld = new THREE.Vector3();
     jointEmptyRef.getWorldPosition(jointWorld);
@@ -796,7 +795,7 @@ function createConstraints() {
         rigidBodies.torso,
         new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin
         pivotB,                             // pivotB: torso local pivot
-        new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
+        new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis (vertical spin)
         new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
         true                                // useReferenceFrameA
     );
@@ -805,9 +804,6 @@ function createConstraints() {
     physicsWorld.addConstraint(constraints.spinHinge, true);
 
     console.log('✅ Created anchor ↔ torso hinge constraint');
-    */
-
-    console.log('⏸️ Anchor ↔ torso hinge constraint DISABLED for testing');
 
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
@@ -1014,7 +1010,7 @@ function animate(currentTime = 0) {
                 currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 1.5;
 
                 // Apply torques to tilt torso based on mouse position
-                const torqueScale = 25.0; // Even stronger torque for testing
+                const torqueScale = 8.0; // Reasonable torque for controlled tilting
                 const torqueX = currentAnchorX * torqueScale; // Tilt around X-axis
                 const torqueZ = currentAnchorZ * torqueScale; // Tilt around Z-axis
 
@@ -1034,8 +1030,8 @@ function animate(currentTime = 0) {
                     console.log(`🔄 After torque - AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
                 }
 
-                // TEMPORARY: Disable damping to test if it's preventing motion
-                rigidBodies.torso.setDamping(0.0, 0.0); // No damping for testing
+                // Moderate damping for controlled motion
+                rigidBodies.torso.setDamping(0.2, 0.4); // Linear, angular damping
 
                 // TEMPORARILY DISABLE velocity clearing to test if motion works
                 /*
