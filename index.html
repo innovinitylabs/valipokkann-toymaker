@@ -184,8 +184,8 @@
             <h4>Credits & Links</h4>
 
             <p><strong>Artist:</strong><br>
-            VALIPOKKANN ()<br>
-            <a href="https://instagram.com/valiipokkann" target="_blank" style="color: #e1306c;">Instagram: @valiipokkann follow me</a><br>
+            VALIPOKKANN (வழிப்போக்கன்)<br>
+            <a href="https://instagram.com/valiipokkann" target="_blank" style="color: #e1306c;">Instagram: @valiipokkann (follow me)</a><br>
             <a href="https://twitter.com/valipokkann" target="_blank" style="color: #1da1f2;">Twitter: @valipokkann</a><br>
             <a href="https://valipokkann.in" target="_blank" style="color: #ffffff;">Website: valipokkann.in</a></p>
 
@@ -221,15 +221,11 @@
                 instructions.classList.toggle('expanded');
             });
 
-            // Prevent scroll events from bubbling to canvas when scrolling the description
+            // Prevent scroll events from bubbling to canvas when description is expanded
             instructions.addEventListener('wheel', function(event) {
                 if (instructions.classList.contains('expanded')) {
-                    // Only prevent bubbling if we're actually scrolling the description content
-                    // Check if the scroll would move the content
-                    const scrollable = event.target.closest('.full-desc');
-                    if (scrollable && (scrollable.scrollTop > 0 || event.deltaY > 0)) {
-                        event.stopPropagation();
-                    }
+                    // Stop propagation for all wheel events when expanded - more reliable
+                    event.stopPropagation();
                 }
             }, { passive: false });
         });
