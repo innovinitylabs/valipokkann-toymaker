@@ -716,19 +716,99 @@ function createRigidBodies() {
                 return;
             }
 
-            // Get bounding box dimensions
-            const size = boundingBox.getSize(new THREE.Vector3());
-            console.log(`🔧 Creating collider for torso mesh "${name}": size(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+            // Create collision shape that matches mesh geometry
+            console.log(`🔧 Creating collider for torso mesh "${name}"`);
 
-            // Create box shape based on mesh bounding box (with small padding)
-            const padding = 0.02; // Small padding to prevent clipping
-            const halfExtents = new AmmoLib.btVector3(
-                (size.x * 0.5) + padding,
-                (size.y * 0.5) + padding,
-                (size.z * 0.5) + padding
-            );
+            let shape;
+            try {
+                // Try to create convex hull shape from mesh geometry
+                const geometry = mesh.geometry;
 
-            const shape = new AmmoLib.btBoxShape(halfExtents);
+                // Ensure geometry has positions
+                if (!geometry.attributes.position) {
+                    throw new Error('No position attribute in geometry');
+                }
+
+                // Create convex hull shape from mesh vertices
+                const convexShape = new AmmoLib.btConvexHullShape();
+
+                // Get vertex positions from geometry
+                const positions = geometry.attributes.position.array;
+                const vertexCount = positions.length / 3;
+
+                if (vertexCount < 4) {
+                    throw new Error('Not enough vertices for convex hull');
+                }
+
+                // Add vertices to convex hull (sample every Nth vertex for performance)
+                const samplingRate = Math.max(1, Math.floor(vertexCount / 100)); // Limit to ~100 vertices max
+                const margin = 0.02; // Small margin to prevent objects from getting too close
+
+                let addedPoints = 0;
+                for (let i = 0; i < vertexCount; i += samplingRate) {
+                    const x = positions[i * 3];
+                    const y = positions[i * 3 + 1];
+                    const z = positions[i * 3 + 2];
+
+                    // Apply small outward offset for margin
+                    const length = Math.sqrt(x*x + y*y + z*z);
+                    const normalScale = length > 0.001 ? (length + margin) / length : 1.0 + margin;
+
+                    convexShape.addPoint(new AmmoLib.btVector3(
+                        x * normalScale,
+                        y * normalScale,
+                        z * normalScale
+                    ), true);
+                    addedPoints++;
+                }
+
+                if (addedPoints < 4) {
+                    throw new Error('Not enough points added to convex hull');
+                }
+
+                // Set collision margin and optimize
+                convexShape.setMargin(margin);
+                convexShape.recalcLocalAabb();
+
+                // Try to optimize if available
+                if (convexShape.optimizeConvexHull) {
+                    convexShape.optimizeConvexHull();
+                }
+
+                // Validate convex hull
+                const numPoints = convexShape.getNumPoints();
+                if (numPoints < 4) {
+                    throw new Error(`Convex hull has only ${numPoints} points, need at least 4`);
+                }
+
+                shape = convexShape;
+                console.log(`  ✅ Convex hull created with ${numPoints} points from ${vertexCount} vertices (${addedPoints} sampled)`);
+
+            } catch (error) {
+                // Fallback to multiple boxes or capsule if convex hull fails
+                console.warn(`  ⚠️ Convex hull failed for "${name}": ${error.message}, using compound shape`);
+
+                const size = boundingBox.getSize(new THREE.Vector3());
+
+                // For elongated shapes, use capsule; for boxy shapes, use box
+                if (Math.max(size.x, size.y, size.z) / Math.min(size.x, size.y, size.z) > 3) {
+                    // Elongated shape - use capsule
+                    const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
+                    const height = Math.max(size.x, size.y, size.z) - 2 * radius;
+                    shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height));
+                    console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
+                } else {
+                    // Boxy shape - use oriented box
+                    const padding = 0.02;
+                    const halfExtents = new AmmoLib.btVector3(
+                        (size.x * 0.5) + padding,
+                        (size.y * 0.5) + padding,
+                        (size.z * 0.5) + padding
+                    );
+                    shape = new AmmoLib.btBoxShape(halfExtents);
+                    console.log(`    📦 Using box: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                }
+            }
 
             // Static body (mass = 0) - kinematic collision-only
             const localInertia = new AmmoLib.btVector3(0, 0, 0);
@@ -749,13 +829,19 @@ function createRigidBodies() {
             // Add to physics world - collides with limbs
             physicsWorld.addRigidBody(colliderBody, GROUP_TORSO_PART, GROUP_LIMB);
 
+            // Debug: Log collision shape type and basic info
+            const shapeType = shape.constructor.name;
+            console.log(`  🎯 Added ${shapeType} collider for "${name}"`);
+
             // Store for later position updates
             rigidBodies.torsoMeshColliders.push({
                 body: colliderBody,
                 mesh: mesh,
                 name: name,
                 initialPosition: worldPosition.clone(),
-                initialQuaternion: worldQuaternion.clone()
+                initialQuaternion: worldQuaternion.clone(),
+                shape: shape,
+                shapeType: shapeType
             });
         });
 
