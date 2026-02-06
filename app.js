@@ -1195,6 +1195,75 @@ function createConstraints() {
 
     // console.log(`✅ CONSTRAINTS CREATED: ${Object.keys(constraints).length} total`);
     // console.log("CONSTRAINT GRAPH:", Object.keys(constraints));
+
+    // STEP 6: CREATE PIVOT COLLIDERS - Small bodies at joint locations to prevent detachment
+    {
+        console.log('🔩 Creating pivot colliders to prevent limb detachment');
+
+        const pivotColliders = [
+            { name: 'leftHandPivot', constraint: leftHandConstraint, limb: 'leftArm' },
+            { name: 'rightHandPivot', constraint: rightHandConstraint, limb: 'rightArm' },
+            { name: 'leftLegPivot', constraint: leftLegConstraint, limb: 'leftLeg' },
+            { name: 'rightLegPivot', constraint: rightLegConstraint, limb: 'rightLeg' }
+        ];
+
+        rigidBodies.pivotColliders = []; // Store pivot colliders for position updates
+
+        pivotColliders.forEach(pivot => {
+            const { name, constraint, limb } = pivot;
+
+            // Get joint position
+            let jointPos = new THREE.Vector3();
+            if (constraint) {
+                constraint.getWorldPosition(jointPos);
+            } else if (rigidBodies[limb]) {
+                // Fallback: use limb position
+                const limbTransform = new AmmoLib.btTransform();
+                rigidBodies[limb].getMotionState().getWorldTransform(limbTransform);
+                const limbOrigin = limbTransform.getOrigin();
+                jointPos.set(limbOrigin.x(), limbOrigin.y(), limbOrigin.z());
+            } else {
+                console.warn(`⚠️ Skipping pivot collider for ${name} - no position available`);
+                return;
+            }
+
+            // Create very small sphere collider at pivot point
+            const radius = 0.03; // Very small - just enough to prevent detachment
+            const shape = new AmmoLib.btSphereShape(radius);
+
+            // Static body (mass = 0) - kinematic collision-only
+            const localInertia = new AmmoLib.btVector3(0, 0, 0);
+
+            // Position at joint location
+            const transform = new AmmoLib.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new AmmoLib.btVector3(jointPos.x, jointPos.y, jointPos.z));
+            transform.setRotation(new AmmoLib.btQuaternion(0, 0, 0, 1));
+
+            const motionState = new AmmoLib.btDefaultMotionState(transform);
+            const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(0, motionState, shape, localInertia);
+
+            const pivotBody = new AmmoLib.btRigidBody(rbInfo);
+            pivotBody.setCollisionFlags(pivotBody.getCollisionFlags() | 1); // CF_STATIC_OBJECT
+            pivotBody.setActivationState(4); // DISABLE_DEACTIVATION
+
+            // Add to physics world - collides only with limbs (not torso)
+            physicsWorld.addRigidBody(pivotBody, GROUP_TORSO_PART, GROUP_LIMB);
+
+            // Store for position updates
+            rigidBodies.pivotColliders.push({
+                body: pivotBody,
+                name: name,
+                initialPosition: jointPos.clone(),
+                shape: shape,
+                shapeType: 'btSphereShape'
+            });
+
+            console.log(`  🔩 Added pivot collider "${name}" at (${jointPos.x.toFixed(3)}, ${jointPos.y.toFixed(3)}, ${jointPos.z.toFixed(3)})`);
+        });
+
+        console.log(`✅ Created ${rigidBodies.pivotColliders.length} pivot colliders`);
+    }
 }
 
 // Mouse interaction variables
@@ -1537,6 +1606,43 @@ function syncPhysicsToThree() {
 
             // Update collider position (static bodies need manual transform updates)
             body.setWorldTransform(colliderTransform);
+        });
+    }
+
+    // Sync pivot colliders to follow joint positions
+    if (rigidBodies.pivotColliders && rigidBodies.pivotColliders.length > 0) {
+        const pivotUpdates = [
+            { name: 'leftHandPivot', constraint: leftHandConstraint, limb: 'leftArm' },
+            { name: 'rightHandPivot', constraint: rightHandConstraint, limb: 'rightArm' },
+            { name: 'leftLegPivot', constraint: leftLegConstraint, limb: 'leftLeg' },
+            { name: 'rightLegPivot', constraint: rightLegConstraint, limb: 'rightLeg' }
+        ];
+
+        pivotUpdates.forEach(update => {
+            const pivotCollider = rigidBodies.pivotColliders.find(pc => pc.name === update.name);
+            if (!pivotCollider) return;
+
+            // Get current joint position
+            let jointPos = new THREE.Vector3();
+            if (update.constraint) {
+                update.constraint.getWorldPosition(jointPos);
+            } else if (rigidBodies[update.limb]) {
+                // Fallback: use limb position
+                const limbTransform = new AmmoLib.btTransform();
+                rigidBodies[update.limb].getMotionState().getWorldTransform(limbTransform);
+                const limbOrigin = limbTransform.getOrigin();
+                jointPos.set(limbOrigin.x(), limbOrigin.y(), limbOrigin.z());
+            } else {
+                return; // Skip if no position available
+            }
+
+            // Update pivot collider position
+            const pivotTransform = new AmmoLib.btTransform();
+            pivotTransform.setIdentity();
+            pivotTransform.setOrigin(new AmmoLib.btVector3(jointPos.x, jointPos.y, jointPos.z));
+            pivotTransform.setRotation(new AmmoLib.btQuaternion(0, 0, 0, 1)); // No rotation needed for spheres
+
+            pivotCollider.body.setWorldTransform(pivotTransform);
         });
     }
 
