@@ -9,7 +9,7 @@ const camera = new THREE.PerspectiveCamera(
     0.1,
     1000
 );
-camera.position.set(0, 8, 12);
+camera.position.set(0, 8, 18);
 camera.lookAt(0, 0, 0);
 
 // Renderer setup - optimized for bright, vibrant toy display
@@ -971,7 +971,7 @@ function hideLoading() {
 const ZOOM_SPEED = 0.1; // How fast to zoom
 const MIN_ZOOM_DISTANCE = 5; // Closest zoom distance
 const MAX_ZOOM_DISTANCE = 25; // Farthest zoom distance
-let currentZoomDistance = 12; // Current distance from camera to target (matches initial position)
+let currentZoomDistance = 18; // Current distance from camera to target (matches initial position)
 
 // Animation timing
 let lastTime = 0;
