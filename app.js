@@ -1016,8 +1016,8 @@ function onMouseMove(event) {
 function onMouseDown(event) {
     mouseButtonDown = true;
     lastMouseX = event.clientX;
-    // Randomly choose rotation direction when button is first pressed
-    currentRotationDirection = Math.random() > 0.5 ? 1 : -1;
+    // Alternate rotation direction with each click
+    currentRotationDirection *= -1; // Toggle between 1 and -1
     console.log(`🖱️ Mouse button down - rotation enabled (${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'}) at X:`, event.clientX);
 }
 
