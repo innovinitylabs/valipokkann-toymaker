@@ -1017,13 +1017,8 @@ function animate(currentTime = 0) {
             console.log(`🎬 Animation running - frame ${frameCount}`);
         }
 
-        // PHYSICS CONTROL - Smart mouse control with stop detection
+        // PHYSICS CONTROL - Click-to-rotate control
         if (AmmoLib && physicsWorld) {
-            // Check if mouse has stopped moving (apply timeout)
-            const timeSinceMouseMove = performance.now() - lastMouseMoveTime;
-            if (timeSinceMouseMove > MOUSE_STOP_TIMEOUT) {
-                mouseMoving = false;
-            }
             // Check if mouse has significant input
             const hasInput = Math.abs(currentAnchorX) > 0.1 || Math.abs(currentAnchorZ) > 0.1;
             if (frameCount % 60 === 0 && hasInput) {
@@ -1073,13 +1068,15 @@ function animate(currentTime = 0) {
                     console.log(`🔄 After torque - AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
                 }
 
-                // Set damping based on mouse activity
-                if (mouseMoving) {
-                    // Light damping when mouse is moving
+                // Set damping based on mouse button state
+                if (mouseButtonDown) {
+                    // Light damping during active rotation
                     rigidBodies.torso.setDamping(0.1, 0.2);
                 } else {
-                    // Strong damping when mouse stops to bring rotation to rest
+                    // Strong damping when not rotating to bring to rest
                     rigidBodies.torso.setDamping(0.5, 0.8);
+                    // Clear angular velocity when mouse button is up
+                    rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
                 }
             }
 
