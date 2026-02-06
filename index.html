@@ -51,6 +51,15 @@
             font-size: 18px;
             margin-bottom: 8px;
             text-align: center;
+            white-space: nowrap;
+        }
+
+        #instructions .description {
+            font-size: 13px;
+            line-height: 1.4;
+            margin-bottom: 10px;
+            text-align: justify;
+            color: rgba(255, 255, 255, 0.9);
         }
 
         #instructions .full-desc {
@@ -73,10 +82,11 @@
         }
 
         #instructions .click-hint {
-            font-size: 12px;
-            opacity: 0.7;
-            margin-top: 8px;
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 10px;
             font-style: italic;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -84,6 +94,9 @@
     <canvas id="canvas"></canvas>
     <div id="instructions">
         <div class="short-desc">Elastic Memory – becoming a Toymaker</div>
+        <div class="description">
+            Elastic Memory is a physics-driven reinterpretation of a traditional jumping jack toy, inspired by an old elastic-connected version that aged unevenly with use. As the system spins faster, its limbs stretch and drift, temporarily losing alignment before returning as motion slows. This instability is intentional, echoing how real toys accumulated wear, imbalance, and character over time. The work exists between control and loss of control, treating physics not as a rulebook, but as a collaborator.
+        </div>
         <div class="controls">
             • Click & hold: alternates spin direction (clockwise ↔ counterclockwise)<br>
             • Release mouse: stops spinning and toy comes to rest<br>
