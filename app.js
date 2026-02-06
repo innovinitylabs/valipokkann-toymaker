@@ -815,31 +815,23 @@ function createConstraints() {
     const jointWorld = new THREE.Vector3();
     jointEmptyRef.getWorldPosition(jointWorld);
 
-    // Get torso physics body world transform
-    const torsoTransform = new AmmoLib.btTransform();
-    rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
-    const torsoOrigin = torsoTransform.getOrigin();
-
     // Use world Y-axis (0,1,0) - GLB export should align torso correctly
     const trueYAxis = new AmmoLib.btVector3(0, 1, 0);
 
-    // Compute pivotB = jointWorld − torsoWorldOrigin
-    const pivotB = new AmmoLib.btVector3(
-        jointWorld.x - torsoOrigin.x(),
-        jointWorld.y - torsoOrigin.y(),
-        jointWorld.z - torsoOrigin.z()
-    );
+    // For clean center rotation, use (0,0,0) as pivot in torso local space
+    // This makes the torso rotate around its center of mass
+    const pivotB = new AmmoLib.btVector3(0, 0, 0);
 
-    console.log(`🔄 Hinge axis derived from torso transform: Y=(${trueYAxis.x().toFixed(3)}, ${trueYAxis.y().toFixed(3)}, ${trueYAxis.z().toFixed(3)})`);
+    console.log(`🔄 Using center pivot for stable rotation around torso center of mass`);
 
-    // Create hinge constraint between anchor and torso - uses true Y-axis from transform
+    // Create hinge constraint between anchor and torso - rotates around center
     constraints.spinHinge = new AmmoLib.btHingeConstraint(
         rigidBodies.anchor,
         rigidBodies.torso,
         new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin
-        pivotB,                             // pivotB: torso local pivot
-        trueYAxis,                          // axisA: true Y-axis from torso transform
-        trueYAxis,                          // axisB: true Y-axis from torso transform
+        pivotB,                             // pivotB: (0,0,0) - torso center
+        trueYAxis,                          // axisA: Y-axis for rotation
+        trueYAxis,                          // axisB: Y-axis for rotation
         true                                // useReferenceFrameA
     );
 
