@@ -910,33 +910,26 @@ let physicsMeshMap = new Map();
 console.log('Motor-based Ammo.js jumping jack initialized');
 
 // Mouse control state
-let mouseMoving = false;
-let lastMouseMoveTime = 0;
 let mouseButtonDown = false;
 let lastMouseX = 0;
-const MOUSE_STOP_TIMEOUT = 100; // ms after mouse stops moving
+let currentMouseDelta = 0;
 
 function onMouseMove(event) {
     // Convert mouse position to normalized device coordinates (-1 to +1)
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    // Track mouse movement for rotation control (only when button is down)
+    // Track mouse delta for rotation control (only when button is down)
     if (mouseButtonDown) {
         const deltaX = event.clientX - lastMouseX;
+        currentMouseDelta = deltaX * 0.005; // Scale down for reasonable rotation speed
         lastMouseX = event.clientX;
-
-        // Update rotation target based on horizontal mouse movement
-        targetAnchorX = Math.max(-2, Math.min(2, targetAnchorX + deltaX * 0.01));
-
-        mouseMoving = true;
-        lastMouseMoveTime = performance.now();
     }
 
     // Debug: Log mouse input occasionally
     if (Math.abs(mouse.x) > 0.1 || Math.abs(mouse.y) > 0.1) {
         if (frameCount % 30 === 0) { // Throttle logging
-            console.log(`🐭 Mouse: screen(${event.clientX}, ${event.clientY}) normalized(${mouse.x.toFixed(2)}, ${mouse.y.toFixed(2)})`);
+            console.log(`🐭 Mouse: screen(${event.clientX}, ${event.clientY}) delta(${currentMouseDelta.toFixed(3)})`);
         }
     }
 }
