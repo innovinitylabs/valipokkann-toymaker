@@ -299,15 +299,15 @@ function initScene() {
             }
 
             // Add coordinate system gizmos for debugging
-            // Global axes helper (shows world XYZ at origin)
-            globalAxesHelper = createLabeledAxesHelper(2, 0.15); // 2 units long, 0.15 label size
-            globalAxesHelper.position.set(0, 0, 0);
-            scene.add(globalAxesHelper);
+            // REMOVED: Global axes helper (shows world XYZ at origin)
+            // globalAxesHelper = createLabeledAxesHelper(2, 0.15); // 2 units long, 0.15 label size
+            // globalAxesHelper.position.set(0, 0, 0);
+            // scene.add(globalAxesHelper);
 
-            if (bodyMainRef) {
-                torsoAxesHelper = createLabeledAxesHelper(1, 0.08); // 1 unit long, 0.08 label size
-                bodyMainRef.add(torsoAxesHelper);
-            }
+            // if (bodyMainRef) {
+            //     torsoAxesHelper = createLabeledAxesHelper(1, 0.08); // 1 unit long, 0.08 label size
+            //     bodyMainRef.add(torsoAxesHelper);
+            // }
 
 
             // Create physics bodies (only after GLTF loads and bodyMainRef is found)
