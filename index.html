@@ -311,6 +311,42 @@
             <a href="https://instagram.com/amritpaldesign" target="_blank" style="color: #e1306c;">Instagram: @amritpaldesign</a></p>
         </div>
     </div>
+
+    <!-- Reset button positioned on canvas -->
+    <div id="resetContainer" style="position: absolute; top: 20px; right: 20px; z-index: 100;">
+        <button id="resetButton" style="padding: 10px 16px; background: rgba(255,0,0,0.8); color: white; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.2s ease;">
+            🔄 Reset Toy
+        </button>
+    </div>
+
+    <style>
+        /* Mobile responsive reset button */
+        @media (max-width: 768px) {
+            #resetContainer {
+                top: 10px;
+                right: 10px;
+            }
+
+            #resetButton {
+                padding: 8px 12px;
+                font-size: 12px;
+                border-radius: 4px;
+            }
+        }
+
+        /* Reset button hover effects */
+        #resetButton:hover {
+            background: rgba(255, 0, 0, 0.9) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        #resetButton:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+    </style>
+
     <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; font-size: 16px;">
         Loading Ammo.js physics engine...
     </div>
@@ -330,9 +366,10 @@
             }
         }, 1000);
 
-        // Handle expandable description
+        // Handle expandable description and reset button
         document.addEventListener('DOMContentLoaded', function() {
             const instructions = document.getElementById('instructions');
+            const resetButton = document.getElementById('resetButton');
 
             // Handle both click and touch events for better mobile support
             function toggleDescription(event) {
@@ -371,6 +408,15 @@
                     event.stopPropagation();
                 }
             }, { passive: true });
+
+            // Reset button functionality
+            if (resetButton) {
+                resetButton.addEventListener('click', function() {
+                    if (window.resetToy) {
+                        window.resetToy();
+                    }
+                });
+            }
         });
     </script>
     <script src="app.js"></script>

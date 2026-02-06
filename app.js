@@ -689,6 +689,13 @@ function createRigidBodies() {
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies.torso.setDamping(0.02, 0.02); // Physically sane damping for hinge motor control
 
+        // Store initial state for reset functionality
+        initialStates.torso = {
+            position: worldPos.clone(),
+            quaternion: worldQuat.clone(),
+            transform: transform
+        };
+
         // Add to physics world - torso core does NOT collide with anything (mass/inertia/constraints only)
         physicsWorld.addRigidBody(rigidBodies.torso, GROUP_TORSO, 0); // Torso collides with nothing
 
@@ -710,9 +717,14 @@ function createRigidBodies() {
         window.torsoMeshes.forEach((meshInfo, index) => {
             const { name, mesh, boundingBox, worldPosition, worldQuaternion } = meshInfo;
 
-            // Skip certain meshes that shouldn't have collision (like very small parts)
-            if (name.includes('stick') || name.includes('string') || boundingBox.getSize(new THREE.Vector3()).length() < 0.1) {
-                console.log(`⏭️ Skipping collision for small mesh: ${name}`);
+            // Skip only truly irrelevant meshes (strings, very tiny decorative parts)
+            // Include body panels, slabs, and structural elements for collision
+            const size = boundingBox.getSize(new THREE.Vector3());
+            const shouldSkip = name.includes('string') ||
+                              (size.x < 0.05 && size.y < 0.05 && size.z < 0.05 && !name.includes('stick'));
+
+            if (shouldSkip) {
+                console.log(`⏭️ Skipping collision for irrelevant mesh: ${name} (size: ${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
                 return;
             }
 
@@ -720,6 +732,38 @@ function createRigidBodies() {
             console.log(`🔧 Creating collider for torso mesh "${name}"`);
 
             let shape;
+
+            // Special handling for different mesh types
+            if (name.includes('stick')) {
+                // For sticks, use capsule for better physics on thin objects
+                const height = Math.max(size.x, size.y, size.z);
+                const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
+
+                shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
+                console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+
+            } else if (size.x / Math.max(size.y, size.z) > 3 ||
+                       size.y / Math.max(size.x, size.z) > 3 ||
+                       size.z / Math.max(size.x, size.y) > 3) {
+                // Elongated shape (like sticks) - use capsule
+                const height = Math.max(size.x, size.y, size.z);
+                const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
+
+                shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
+                console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+
+            } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.1) {
+                // Very thin slab (one dimension much smaller than others) - use box for precise collision
+                const padding = 0.01; // Smaller padding for slabs
+                const halfExtents = new AmmoLib.btVector3(
+                    (size.x * 0.5) + padding,
+                    (size.y * 0.5) + padding,
+                    (size.z * 0.5) + padding
+                );
+
+                shape = new AmmoLib.btBoxShape(halfExtents);
+                console.log(`    📦 Using box for thin slab: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+            }
             try {
                 // Try to create convex hull shape from mesh geometry
                 const geometry = mesh.geometry;
@@ -971,6 +1015,13 @@ function createRigidBodies() {
         }
         // console.log(`✅ ${name} created as dynamic body (flags: ${flags})`);
 
+        // Store initial state for reset functionality
+        initialStates[name] = {
+            position: worldPos.clone(),
+            quaternion: worldQuat.clone(),
+            transform: initialTransform
+        };
+
         // Dynamic body setup - limbs must be dynamic from creation
         rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
@@ -1183,7 +1234,136 @@ function createConstraints() {
 
     // console.log(`✅ CONSTRAINTS CREATED: ${Object.keys(constraints).length} total`);
     // console.log("CONSTRAINT GRAPH:", Object.keys(constraints));
+
+    // STEP 6: CREATE PIVOT COLLIDERS - Small bodies at joint locations to prevent detachment
+    {
+        console.log('🔩 Creating pivot colliders to prevent limb detachment');
+
+        const pivotColliders = [
+            { name: 'leftHandPivot', constraint: leftHandConstraint, limb: 'leftArm' },
+            { name: 'rightHandPivot', constraint: rightHandConstraint, limb: 'rightArm' },
+            { name: 'leftLegPivot', constraint: leftLegConstraint, limb: 'leftLeg' },
+            { name: 'rightLegPivot', constraint: rightLegConstraint, limb: 'rightLeg' }
+        ];
+
+        rigidBodies.pivotColliders = []; // Store pivot colliders for position updates
+
+        pivotColliders.forEach(pivot => {
+            const { name, constraint, limb } = pivot;
+
+            // Get joint position
+            let jointPos = new THREE.Vector3();
+            if (constraint) {
+                constraint.getWorldPosition(jointPos);
+            } else if (rigidBodies[limb]) {
+                // Fallback: use limb position
+                const limbTransform = new AmmoLib.btTransform();
+                rigidBodies[limb].getMotionState().getWorldTransform(limbTransform);
+                const limbOrigin = limbTransform.getOrigin();
+                jointPos.set(limbOrigin.x(), limbOrigin.y(), limbOrigin.z());
+            } else {
+                console.warn(`⚠️ Skipping pivot collider for ${name} - no position available`);
+                return;
+            }
+
+            // Create very small sphere collider at pivot point
+            const radius = 0.03; // Very small - just enough to prevent detachment
+            const shape = new AmmoLib.btSphereShape(radius);
+
+            // Static body (mass = 0) - kinematic collision-only
+            const localInertia = new AmmoLib.btVector3(0, 0, 0);
+
+            // Position at joint location
+            const transform = new AmmoLib.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(new AmmoLib.btVector3(jointPos.x, jointPos.y, jointPos.z));
+            transform.setRotation(new AmmoLib.btQuaternion(0, 0, 0, 1));
+
+            const motionState = new AmmoLib.btDefaultMotionState(transform);
+            const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(0, motionState, shape, localInertia);
+
+            const pivotBody = new AmmoLib.btRigidBody(rbInfo);
+            pivotBody.setCollisionFlags(pivotBody.getCollisionFlags() | 1); // CF_STATIC_OBJECT
+            pivotBody.setActivationState(4); // DISABLE_DEACTIVATION
+
+            // Add to physics world - collides only with limbs (not torso)
+            physicsWorld.addRigidBody(pivotBody, GROUP_TORSO_PART, GROUP_LIMB);
+
+            // Store for position updates
+            rigidBodies.pivotColliders.push({
+                body: pivotBody,
+                name: name,
+                initialPosition: jointPos.clone(),
+                shape: shape,
+                shapeType: 'btSphereShape'
+            });
+
+            console.log(`  🔩 Added pivot collider "${name}" at (${jointPos.x.toFixed(3)}, ${jointPos.y.toFixed(3)}, ${jointPos.z.toFixed(3)})`);
+        });
+
+        console.log(`✅ Created ${rigidBodies.pivotColliders.length} pivot colliders`);
+    }
 }
+
+// Reset toy to initial state
+function resetToy() {
+    console.log('🔄 Resetting toy to initial state...');
+
+    // Reset torso
+    if (rigidBodies.torso && initialStates.torso) {
+        const { position, quaternion, transform } = initialStates.torso;
+
+        // Reset physics body
+        rigidBodies.torso.setWorldTransform(transform);
+        rigidBodies.torso.setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+        rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+        rigidBodies.torso.clearForces();
+        rigidBodies.torso.setActivationState(1); // ACTIVE_TAG to wake up
+
+        // Reset Three.js mesh
+        if (bodyMainRef) {
+            bodyMainRef.position.copy(position);
+            bodyMainRef.quaternion.copy(quaternion);
+        }
+    }
+
+    // Reset limbs
+    const limbNames = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+    limbNames.forEach(name => {
+        if (rigidBodies[name] && initialStates[name]) {
+            const { position, quaternion, transform } = initialStates[name];
+            const ref = name === 'leftArm' ? leftArmRef :
+                       name === 'rightArm' ? rightArmRef :
+                       name === 'leftLeg' ? leftLegRef : rightLegRef;
+
+            // Reset physics body
+            rigidBodies[name].setWorldTransform(transform);
+            rigidBodies[name].setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+            rigidBodies[name].setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+            rigidBodies[name].clearForces();
+            rigidBodies[name].setActivationState(1); // ACTIVE_TAG to wake up
+
+            // Reset Three.js mesh
+            if (ref) {
+                ref.position.copy(position);
+                ref.quaternion.copy(quaternion);
+            }
+        }
+    });
+
+    // Reset torso mesh colliders (they follow their meshes, so they'll be updated in next sync)
+    // Reset pivot colliders (they follow joint positions, so they'll be updated in next sync)
+
+    // Reset mouse interaction state
+    mouseButtonDown = false;
+    mouseMoving = false;
+    currentRotationDirection = 1;
+
+    console.log('✅ Toy reset complete');
+}
+
+// Make reset function globally available
+window.resetToy = resetToy;
 
 // Mouse interaction variables
 const mouse = new THREE.Vector2();
@@ -1199,6 +1379,9 @@ const MOTOR_MAX_TORQUE = 15.0;  // Torque limit
 const GROUP_TORSO = 1;
 const GROUP_LIMB = 2;
 const GROUP_TORSO_PART = 4; // New group for torso collision proxies
+
+// Global storage for initial states (used for reset functionality)
+let initialStates = {};
 
 // Loading overlay management
 function hideLoading() {
@@ -1525,6 +1708,43 @@ function syncPhysicsToThree() {
 
             // Update collider position (static bodies need manual transform updates)
             body.setWorldTransform(colliderTransform);
+        });
+    }
+
+    // Sync pivot colliders to follow joint positions
+    if (rigidBodies.pivotColliders && rigidBodies.pivotColliders.length > 0) {
+        const pivotUpdates = [
+            { name: 'leftHandPivot', constraint: leftHandConstraint, limb: 'leftArm' },
+            { name: 'rightHandPivot', constraint: rightHandConstraint, limb: 'rightArm' },
+            { name: 'leftLegPivot', constraint: leftLegConstraint, limb: 'leftLeg' },
+            { name: 'rightLegPivot', constraint: rightLegConstraint, limb: 'rightLeg' }
+        ];
+
+        pivotUpdates.forEach(update => {
+            const pivotCollider = rigidBodies.pivotColliders.find(pc => pc.name === update.name);
+            if (!pivotCollider) return;
+
+            // Get current joint position
+            let jointPos = new THREE.Vector3();
+            if (update.constraint) {
+                update.constraint.getWorldPosition(jointPos);
+            } else if (rigidBodies[update.limb]) {
+                // Fallback: use limb position
+                const limbTransform = new AmmoLib.btTransform();
+                rigidBodies[update.limb].getMotionState().getWorldTransform(limbTransform);
+                const limbOrigin = limbTransform.getOrigin();
+                jointPos.set(limbOrigin.x(), limbOrigin.y(), limbOrigin.z());
+            } else {
+                return; // Skip if no position available
+            }
+
+            // Update pivot collider position
+            const pivotTransform = new AmmoLib.btTransform();
+            pivotTransform.setIdentity();
+            pivotTransform.setOrigin(new AmmoLib.btVector3(jointPos.x, jointPos.y, jointPos.z));
+            pivotTransform.setRotation(new AmmoLib.btQuaternion(0, 0, 0, 1)); // No rotation needed for spheres
+
+            pivotCollider.body.setWorldTransform(pivotTransform);
         });
     }
 
