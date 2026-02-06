@@ -1086,6 +1086,11 @@ function animate(currentTime = 0) {
             if (constraints.spinHinge) {
                 // console.log(`🔗 spinHinge constraint exists: ${!!constraints.spinHinge}`);
                 if (mouseButtonDown) {
+                    // Reset to low damping for free spinning when mouse is down
+                    if (rigidBodies.torso) {
+                        rigidBodies.torso.setDamping(0.02, 0.02); // Low damping for spinning
+                    }
+
                     // TEMP: Try direct torque first to verify physics works
                     // console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
                     const torque = 100.0 * currentRotationDirection; // Direct torque
@@ -1122,6 +1127,11 @@ function animate(currentTime = 0) {
                 } else {
                     // Disable motor cleanly
                     constraints.spinHinge.enableAngularMotor(false, 0, 0);
+
+                    // Apply strong damping to bring toy to rest when mouse is released
+                    if (rigidBodies.torso) {
+                        rigidBodies.torso.setDamping(0.8, 0.9); // Strong damping to stop quickly
+                    }
 
                     // DEBUG: Log motor deactivation
                     // if (frameCount % 60 === 0) {
