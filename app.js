@@ -912,7 +912,7 @@ function createConstraints() {
             );
 
             // Disable angle limits to allow free rotation (important for centrifugal force!)
-            hinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.1, 0.1, 1.0); // Wide limits - full rotation allowed
+            hinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.01, 0.01, 1.0); // Very soft limits - minimal resistance
 
             // Add to physics world (disable collisions between connected bodies)
             physicsWorld.addConstraint(hinge, true);
@@ -1077,7 +1077,7 @@ function animate(currentTime = 0) {
 
                     // Apply sustained angular velocity when mouse is down
                     if (mouseButtonDown) {
-                        const angularVelocityY = 10.0 * currentRotationDirection; // Direct velocity, not torque
+                        const angularVelocityY = 50.0 * currentRotationDirection; // Much higher velocity for centrifugal force
 
                         // Set angular velocity directly (persistent spin)
                         rigidBodies.torso.setAngularVelocity(
@@ -1099,12 +1099,12 @@ function animate(currentTime = 0) {
                 // Keep limbs lightly damped and aggressively active for centrifugal response
                 ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
                     if (rigidBodies[name]) {
-                        rigidBodies[name].setDamping(0.01, 0.02); // Very light damping
+                        rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
                         rigidBodies[name].activate(true); // Aggressively keep limbs active
                         rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
                         // DEBUG: Log limb positions during spin
-                        if (mouseButtonDown && frameCount % 60 === 0) {
+                        if (mouseButtonDown && frameCount % 30 === 0) {
                             const pos = rigidBodies[name].getWorldTransform().getOrigin();
                             console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
                         }
