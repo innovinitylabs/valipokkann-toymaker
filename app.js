@@ -772,11 +772,8 @@ function createConstraints() {
         return;
     }
 
-    // STEP 5: ANCHOR ↔ TORSO HINGE
-    // pivotA = (0,0,0) in anchor local space
-    // pivotB = jointWorld − torsoWorldOrigin
-    // axis = Y axis
-
+    // STEP 5: ANCHOR ↔ TORSO HINGE - TEMPORARILY DISABLED FOR TESTING
+    /*
     // Compute jointWorld from Blender Empty
     const jointWorld = new THREE.Vector3();
     jointEmptyRef.getWorldPosition(jointWorld);
@@ -808,6 +805,9 @@ function createConstraints() {
     physicsWorld.addConstraint(constraints.spinHinge, true);
 
     console.log('✅ Created anchor ↔ torso hinge constraint');
+    */
+
+    console.log('⏸️ Anchor ↔ torso hinge constraint DISABLED for testing');
 
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
@@ -1018,17 +1018,20 @@ function animate(currentTime = 0) {
                 const torqueX = currentAnchorX * torqueScale; // Tilt around X-axis
                 const torqueZ = currentAnchorZ * torqueScale; // Tilt around Z-axis
 
+                // DEBUG: Log current values
+                if (frameCount % 60 === 0) {
+                    console.log(`🎯 Mouse targets: X=${currentAnchorX.toFixed(2)}, Z=${currentAnchorZ.toFixed(2)} | Torque: X=${torqueX.toFixed(2)}, Z=${torqueZ.toFixed(2)}`);
+                }
+
                 // Apply torque to torso (rotational force)
                 rigidBodies.torso.applyTorque(
                     new AmmoLib.btVector3(torqueX, 0, torqueZ)
                 );
 
                 // DEBUG: Check angular velocity after applying torque
-                if (Math.abs(torqueX) > 1 || Math.abs(torqueZ) > 1) {
-                    const angVel = rigidBodies.torso.getAngularVelocity();
-                    if (frameCount % 30 === 0) { // Throttle logging
-                        console.log(`🔄 Torque applied: (${torqueX.toFixed(2)}, 0, ${torqueZ.toFixed(2)}) | AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
-                    }
+                const angVel = rigidBodies.torso.getAngularVelocity();
+                if (frameCount % 60 === 0) { // Throttle logging
+                    console.log(`🔄 After torque - AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
                 }
 
                 // TEMPORARY: Disable damping to test if it's preventing motion
