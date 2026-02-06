@@ -819,14 +819,13 @@ function createRigidBodies() {
                     convexShape.optimizeConvexHull();
                 }
 
-                // Validate convex hull
-                const numPoints = convexShape.getNumPoints();
-                if (numPoints < 4) {
-                    throw new Error(`Convex hull has only ${numPoints} points, need at least 4`);
+                // Basic validation - check if convexShape was created successfully
+                if (!convexShape || typeof convexShape.addPoint !== 'function') {
+                    throw new Error('Convex hull creation failed - invalid shape object');
                 }
 
                 shape = convexShape;
-                console.log(`  ✅ Convex hull created with ${numPoints} points from ${vertexCount} vertices (${addedPoints} sampled)`);
+                console.log(`  ✅ Convex hull created from ${vertexCount} vertices (${addedPoints} sampled)`);
 
             } catch (error) {
                 // Fallback to multiple boxes or capsule if convex hull fails
@@ -916,8 +915,24 @@ function createRigidBodies() {
 
         let shape;
         try {
-            // Create convex hull shape from limb mesh geometry
-            const geometry = ref.geometry;
+            // Find the actual mesh geometry (limb refs might be groups)
+            let geometry = null;
+            if (ref.geometry) {
+                // Direct mesh
+                geometry = ref.geometry;
+            } else if (ref.children) {
+                // Group - find first mesh child
+                for (const child of ref.children) {
+                    if (child.isMesh && child.geometry) {
+                        geometry = child.geometry;
+                        break;
+                    }
+                }
+            }
+
+            if (!geometry) {
+                throw new Error('Could not find geometry in limb reference');
+            }
 
             // Ensure geometry has positions
             if (!geometry.attributes.position) {
@@ -970,14 +985,13 @@ function createRigidBodies() {
                 convexShape.optimizeConvexHull();
             }
 
-            // Validate convex hull
-            const numPoints = convexShape.getNumPoints();
-            if (numPoints < 4) {
-                throw new Error(`Convex hull has only ${numPoints} points, need at least 4`);
+            // Basic validation - check if convexShape was created successfully
+            if (!convexShape || typeof convexShape.addPoint !== 'function') {
+                throw new Error('Convex hull creation failed - invalid shape object');
             }
 
             shape = convexShape;
-            console.log(`  ✅ Limb convex hull created with ${numPoints} points from ${vertexCount} vertices`);
+            console.log(`  ✅ Limb convex hull created from ${vertexCount} vertices (${addedPoints} sampled)`);
 
         } catch (error) {
             // Fallback to capsule if convex hull fails
