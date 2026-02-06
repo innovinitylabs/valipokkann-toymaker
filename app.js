@@ -227,6 +227,13 @@ function initPhysics() {
         // Set gravity (temporarily disabled for debugging hinge constraints)
         physicsWorld.setGravity(new AmmoLib.btVector3(0, 0, 0)); // DISABLED GRAVITY
 
+        // Configure solver for better constraint stability
+        const solverInfo = physicsWorld.getSolverInfo();
+        solverInfo.m_numIterations = 20; // Additional solver iterations
+        solverInfo.m_erp = 0.8; // Error reduction parameter
+        solverInfo.m_erp2 = 0.8; // Constraint ERP
+        solverInfo.m_globalCfm = 0.0; // Constraint force mixing
+
         // DEBUG: Check rigid body count
         // console.log('🔢 Physics world initialized with gravity:', physicsWorld.getGravity().y());
 
@@ -1159,7 +1166,7 @@ function createConstraints() {
 
             // Set reasonable angle limits to prevent limbs from going through body
             // Allow swinging motion but prevent extreme positions
-            hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.1, 0.1, 0.9); // ~135 degrees each direction
+            hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.05, 0.05, 0.8); // ~135 degrees, softer constraints
 
         // Add to physics world (disable collisions between connected bodies)
             physicsWorld.addConstraint(hinge, true);
@@ -1459,8 +1466,8 @@ function animate(currentTime = 0) {
                         // Limit angular velocity during spinning to prevent excessive speed
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 12.0) { // Reasonable max speed during active spinning
-                            const scale = 12.0 / speed;
+                        if (speed > 8.0) { // Reduced max speed for better constraint stability
+                            const scale = 8.0 / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
@@ -1511,8 +1518,8 @@ function animate(currentTime = 0) {
                         // Also limit angular velocity to prevent excessive spin
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 15.0) { // Limit max rotation speed
-                            const scale = 15.0 / speed;
+                        if (speed > 10.0) { // Limit max rotation speed (reduced for stability)
+                            const scale = 10.0 / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
@@ -1549,7 +1556,7 @@ function animate(currentTime = 0) {
 
             // Step real physics simulation
             try {
-                physicsWorld.stepSimulation(delta, 10);
+                physicsWorld.stepSimulation(delta, 20); // Increased from 10 for better constraint stability
 
                 // DEBUG: Check if constraints are being processed
                 // if (frameCount % 120 === 0) {
