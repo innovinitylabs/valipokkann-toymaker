@@ -992,17 +992,17 @@ function onMouseMove(event) {
         lastMouseX = event.clientX;
 
         // Debug: Log mouse movement
-        if (Math.abs(deltaX) > 0.1) {
-            console.log(`🐭 Mouse move: deltaX=${deltaX.toFixed(1)}, currentDelta=${currentMouseDelta.toFixed(3)}`);
-        }
+        // if (Math.abs(deltaX) > 0.1) {
+        //     console.log(`🐭 Mouse move: deltaX=${deltaX.toFixed(1)}, currentDelta=${currentMouseDelta.toFixed(3)}`);
+        // }
     }
 
-    // Debug: Log mouse delta when button is down
-    if (mouseButtonDown && Math.abs(currentMouseDelta) > 0.001) {
-        if (frameCount % 30 === 0) { // Throttle logging
-            console.log(`🐭 Mouse delta: ${currentMouseDelta.toFixed(3)}`);
-        }
-    }
+        // Debug: Log mouse delta when button is down
+        // if (mouseButtonDown && Math.abs(currentMouseDelta) > 0.001) {
+        //     if (frameCount % 30 === 0) { // Throttle logging
+        //         console.log(`🐭 Mouse delta: ${currentMouseDelta.toFixed(3)}`);
+        //     }
+        // }
 }
 
 function onMouseDown(event) {
@@ -1082,17 +1082,17 @@ function animate(currentTime = 0) {
                             new AmmoLib.btVector3(0, angularVelocityY, 0)
                         );
 
-                        // DEBUG: Log occasionally
-                        if (frameCount % 60 === 0) {
-                            console.log(`🔄 SET ANGULAR VELOCITY: ${angularVelocityY} (direction: ${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'})`);
-                        }
+                    // DEBUG: Log occasionally
+                    // if (frameCount % 60 === 0) {
+                    //     console.log(`🔄 SET ANGULAR VELOCITY: ${angularVelocityY} (direction: ${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'})`);
+                    // }
                     }
 
                     // DEBUG: Check angular velocity periodically
-                    if (frameCount % 60 === 0) {
-                        const angVel = rigidBodies.torso.getAngularVelocity();
-                        console.log(`🔄 AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
-                    }
+                    // if (frameCount % 60 === 0) {
+                    //     const angVel = rigidBodies.torso.getAngularVelocity();
+                    //     console.log(`🔄 AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
+                    // }
 
                 // Keep limbs lightly damped and aggressively active for centrifugal response
                 ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
@@ -1129,7 +1129,7 @@ function animate(currentTime = 0) {
 
             // Periodic check if sync is working
             if (frameCount % 120 === 0) { // Every 2 seconds
-                console.log(`🔄 Physics sync active - frame ${frameCount}`);
+                // console.log(`🔄 Physics sync active - frame ${frameCount}`);
             }
         }
 
