@@ -334,16 +334,25 @@
             }
         }
 
-        /* Reset button hover effects */
+        /* Reset button hover and touch effects */
         #resetButton:hover {
             background: rgba(255, 0, 0, 0.9) !important;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
 
-        #resetButton:active {
+        #resetButton:active,
+        #resetButton:touchstart {
             transform: translateY(0);
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            background: rgba(200, 0, 0, 0.9) !important;
+        }
+
+        /* Mobile touch feedback */
+        @media (max-width: 768px) {
+            #resetButton:active {
+                transform: scale(0.95);
+            }
         }
     </style>
 
@@ -409,13 +418,34 @@
                 }
             }, { passive: true });
 
-            // Reset button functionality
+            // Reset button functionality with mobile support
             if (resetButton) {
-                resetButton.addEventListener('click', function() {
+                function handleReset(event) {
+                    // Prevent event from bubbling to canvas touch handlers
+                    event.stopPropagation();
+                    event.preventDefault();
+
                     if (window.resetToy) {
                         window.resetToy();
                     }
+                }
+
+                // Handle both click and touch events for better mobile support
+                resetButton.addEventListener('click', handleReset);
+
+                // Add touch events specifically for mobile
+                resetButton.addEventListener('touchend', function(event) {
+                    // Only handle if it's a quick tap (not a scroll or long press)
+                    const touchDuration = event.timeStamp - (event.changedTouches[0].startTime || 0);
+                    if (touchDuration < 300) { // Less than 300ms = tap
+                        handleReset(event);
+                    }
                 });
+
+                // Prevent touch events on reset button from interfering with canvas
+                resetButton.addEventListener('touchstart', function(event) {
+                    event.stopPropagation();
+                }, { passive: true });
             }
         });
     </script>

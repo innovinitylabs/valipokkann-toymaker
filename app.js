@@ -227,6 +227,13 @@ function initPhysics() {
         // Set gravity (temporarily disabled for debugging hinge constraints)
         physicsWorld.setGravity(new AmmoLib.btVector3(0, 0, 0)); // DISABLED GRAVITY
 
+        // Configure solver for better constraint stability
+        const solverInfo = physicsWorld.getSolverInfo();
+        solverInfo.m_numIterations = 20; // Additional solver iterations
+        solverInfo.m_erp = 0.8; // Error reduction parameter
+        solverInfo.m_erp2 = 0.8; // Constraint ERP
+        solverInfo.m_globalCfm = 0.0; // Constraint force mixing
+
         // DEBUG: Check rigid body count
         // console.log('🔢 Physics world initialized with gravity:', physicsWorld.getGravity().y());
 
@@ -294,10 +301,10 @@ function initScene() {
             // 🔧 PHYSICS CONTROL: Detach limbs to world space for independent physics sync
             if (bodyMainRef) {
                 // Detach arms to world space (required for physics sync)
-                if (leftArmRef) scene.attach(leftArmRef);
-                if (rightArmRef) scene.attach(rightArmRef);
-                if (leftLegRef) scene.attach(leftLegRef);
-                if (rightLegRef) scene.attach(rightLegRef);
+            if (leftArmRef) scene.attach(leftArmRef);
+            if (rightArmRef) scene.attach(rightArmRef);
+            if (leftLegRef) scene.attach(leftLegRef);
+            if (rightLegRef) scene.attach(rightLegRef);
 
             }
 
@@ -733,6 +740,16 @@ function createRigidBodies() {
 
             let shape;
 
+            // Get vertex count for decision making (defined early for use in conditionals)
+            let vertexCount = 0;
+            try {
+                if (mesh.geometry && mesh.geometry.attributes.position) {
+                    vertexCount = mesh.geometry.attributes.position.array.length / 3;
+                }
+            } catch (e) {
+                // Ignore errors, vertexCount remains 0
+            }
+
             // Special handling for different mesh types
             if (name.includes('stick')) {
                 // For sticks, use capsule for better physics on thin objects
@@ -752,9 +769,12 @@ function createRigidBodies() {
                 shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
                 console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
 
-            } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.1) {
-                // Very thin slab (one dimension much smaller than others) - use box for precise collision
-                const padding = 0.01; // Smaller padding for slabs
+            } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.15 ||
+                       vertexCount < 10 ||
+                       size.x < 0.3 || size.y < 0.3 || size.z < 0.3) {
+                // Skip convex hull for problematic cases: very thin, small, or low-poly meshes
+                // Use simple box instead to avoid physics issues with irregular shapes
+                const padding = 0.01;
                 const halfExtents = new AmmoLib.btVector3(
                     (size.x * 0.5) + padding,
                     (size.y * 0.5) + padding,
@@ -762,7 +782,7 @@ function createRigidBodies() {
                 );
 
                 shape = new AmmoLib.btBoxShape(halfExtents);
-                console.log(`    📦 Using box for thin slab: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                console.log(`    📦 Using box (skipping convex hull): size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), vertices=${vertexCount}`);
             }
             try {
                 // Try to create convex hull shape from mesh geometry
@@ -911,84 +931,15 @@ function createRigidBodies() {
         ref.getWorldPosition(worldPos);
         ref.getWorldQuaternion(worldQuat);
 
-        // Create collision shape that matches limb mesh geometry
+        // Create collision shape for limbs - use capsule for reliability
         console.log(`🔧 Creating collider for limb mesh "${name}"`);
 
-        let shape;
-        try {
-            // Create convex hull shape from limb mesh geometry
-            const geometry = ref.geometry;
-
-            // Ensure geometry has positions
-            if (!geometry.attributes.position) {
-                throw new Error('No position attribute in geometry');
-            }
-
-            // Create convex hull shape from mesh vertices
-            const convexShape = new AmmoLib.btConvexHullShape();
-
-            // Get vertex positions from geometry
-            const positions = geometry.attributes.position.array;
-            const vertexCount = positions.length / 3;
-
-            if (vertexCount < 4) {
-                throw new Error('Not enough vertices for convex hull');
-            }
-
-            // Add vertices to convex hull (sample every Nth vertex for performance)
-            const samplingRate = Math.max(1, Math.floor(vertexCount / 50)); // Limit to ~50 vertices max for limbs
-            const margin = 0.015; // Smaller margin for limbs
-
-            let addedPoints = 0;
-            for (let i = 0; i < vertexCount; i += samplingRate) {
-                const x = positions[i * 3];
-                const y = positions[i * 3 + 1];
-                const z = positions[i * 3 + 2];
-
-                // Apply small outward offset for margin
-                const length = Math.sqrt(x*x + y*y + z*z);
-                const normalScale = length > 0.001 ? (length + margin) / length : 1.0 + margin;
-
-                convexShape.addPoint(new AmmoLib.btVector3(
-                    x * normalScale,
-                    y * normalScale,
-                    z * normalScale
-                ), true);
-                addedPoints++;
-            }
-
-            if (addedPoints < 4) {
-                throw new Error('Not enough points added to convex hull');
-            }
-
-            // Set collision margin and optimize
-            convexShape.setMargin(margin);
-            convexShape.recalcLocalAabb();
-
-            // Try to optimize if available
-            if (convexShape.optimizeConvexHull) {
-                convexShape.optimizeConvexHull();
-            }
-
-            // Validate convex hull
-            const numPoints = convexShape.getNumPoints();
-            if (numPoints < 4) {
-                throw new Error(`Convex hull has only ${numPoints} points, need at least 4`);
-            }
-
-            shape = convexShape;
-            console.log(`  ✅ Limb convex hull created with ${numPoints} points from ${vertexCount} vertices`);
-
-        } catch (error) {
-            // Fallback to capsule if convex hull fails
-            console.warn(`  ⚠️ Convex hull failed for limb "${name}": ${error.message}, using capsule`);
-
-            // Use capsule as fallback for limbs
-            const radius = 0.08;      // thickness of wooden limb
-            const height = 1.2;       // length excluding caps
-            shape = new AmmoLib.btCapsuleShape(radius, height);
-            console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
-        }
+        // For limbs, always use capsule for consistent, reliable physics
+        // Limbs are typically cylindrical/rod-like shapes that work well with capsules
+        const radius = 0.08;      // thickness of wooden limb
+        const height = 1.2;       // length excluding caps
+        const shape = new AmmoLib.btCapsuleShape(radius, height);
+        console.log(`    📏 Using capsule for limb: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
 
         // Calculate local inertia
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
@@ -1201,24 +1152,27 @@ function createConstraints() {
 
         try {
             // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
-            const hinge = new AmmoLib.btHingeConstraint(
-                rigidBodies.torso,
-                body,
-                pivotA,
-                pivotB,
-                new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis (forward axis)
-                new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
-                true
-            );
+            // For jumping jack limbs: use Z-axis rotation to constrain movement to X-Y plane
+            // This prevents limbs from moving in local Z direction (depth)
+        const hinge = new AmmoLib.btHingeConstraint(
+            rigidBodies.torso,
+            body,
+            pivotA,
+            pivotB,
+                new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis - limbs rotate in X-Y plane only
+            new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
+            true
+        );
 
-            // Disable angle limits to allow free rotation (important for centrifugal force!)
-            hinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.01, 0.01, 1.0); // Very soft limits - minimal resistance
+            // Set reasonable angle limits to prevent limbs from going through body
+            // Allow swinging motion but prevent extreme positions
+            hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.05, 0.05, 0.8); // ~135 degrees, softer constraints
 
-            // Add to physics world (disable collisions between connected bodies)
+        // Add to physics world (disable collisions between connected bodies)
             physicsWorld.addConstraint(hinge, true);
 
-            // Store constraint
-            constraints[name] = hinge;
+        // Store constraint
+        constraints[name] = hinge;
 
             // console.log(`✅ Successfully created and added hinge constraint for ${name}`);
 
@@ -1512,8 +1466,8 @@ function animate(currentTime = 0) {
                         // Limit angular velocity during spinning to prevent excessive speed
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 12.0) { // Reasonable max speed during active spinning
-                            const scale = 12.0 / speed;
+                        if (speed > 8.0) { // Reduced max speed for better constraint stability
+                            const scale = 8.0 / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
@@ -1558,14 +1512,14 @@ function animate(currentTime = 0) {
                     constraints.spinHinge.enableAngularMotor(false, 0, 0);
 
                     // Apply very strong damping to bring toy to rest when mouse is released
-                    if (rigidBodies.torso) {
+        if (rigidBodies.torso) {
                         rigidBodies.torso.setDamping(0.95, 0.98); // Very strong damping to stop very quickly
 
                         // Also limit angular velocity to prevent excessive spin
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 15.0) { // Limit max rotation speed
-                            const scale = 15.0 / speed;
+                        if (speed > 10.0) { // Limit max rotation speed (reduced for stability)
+                            const scale = 10.0 / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
@@ -1602,7 +1556,7 @@ function animate(currentTime = 0) {
 
             // Step real physics simulation
             try {
-                physicsWorld.stepSimulation(delta, 10);
+                physicsWorld.stepSimulation(delta, 20); // Increased from 10 for better constraint stability
 
                 // DEBUG: Check if constraints are being processed
                 // if (frameCount % 120 === 0) {
