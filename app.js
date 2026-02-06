@@ -1046,10 +1046,26 @@ function animate(currentTime = 0) {
                     console.log(`🎯 Mouse targets: X=${currentAnchorX.toFixed(2)}, Z=${currentAnchorZ.toFixed(2)} | Torque: X=${torqueX.toFixed(2)}, Z=${torqueZ.toFixed(2)}`);
                 }
 
-                // Apply torque to torso (rotational force)
-                rigidBodies.torso.applyTorque(
-                    new AmmoLib.btVector3(torqueX, 0, torqueZ)
-                );
+                // Apply torque based on mouse delta when button is down
+                if (mouseButtonDown && Math.abs(currentMouseDelta) > 0.001) {
+                    // Apply torque around torso's local Y-axis (up direction)
+                    const torqueY = currentMouseDelta * 10.0; // Scale up for noticeable rotation
+
+                    // Apply torque to torso (Y-axis rotation)
+                    rigidBodies.torso.applyTorque(
+                        new AmmoLib.btVector3(0, torqueY, 0)
+                    );
+
+                    console.log(`🔄 Y-axis torque applied: ${torqueY.toFixed(2)}`);
+
+                    // Reset delta after applying
+                    currentMouseDelta = 0;
+                } else {
+                    // Apply original X/Z torques if no click-drag
+                    rigidBodies.torso.applyTorque(
+                        new AmmoLib.btVector3(torqueX, 0, torqueZ)
+                    );
+                }
 
                 // DEBUG: Check angular velocity after applying torque
                 const angVel = rigidBodies.torso.getAngularVelocity();
