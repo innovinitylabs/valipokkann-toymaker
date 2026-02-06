@@ -901,6 +901,7 @@ let currentZoomDistance = 12; // Current distance from camera to target (matches
 
 // Animation timing
 let lastTime = 0;
+let frameCount = 0;
 
 // Physics ↔ Three.js sync
 let physicsMeshMap = new Map();
@@ -918,6 +919,13 @@ function onMouseMove(event) {
     // Convert screen position to world offset
     targetAnchorX = mouse.x * 2.0; // Scale for reasonable movement range
     targetAnchorZ = mouse.y * 2.0;
+
+    // Debug: Log mouse input occasionally
+    if (Math.abs(mouse.x) > 0.1 || Math.abs(mouse.y) > 0.1) {
+        if (frameCount % 30 === 0) { // Throttle logging
+            console.log(`🐭 Mouse: screen(${event.clientX}, ${event.clientY}) normalized(${mouse.x.toFixed(2)}, ${mouse.y.toFixed(2)})`);
+        }
+    }
 }
 
 function onMouseDown(event) {
@@ -985,13 +993,20 @@ function animate(currentTime = 0) {
         const delta = Math.min((currentTime - lastTime) / 1000, 1/60); // Cap at 60 FPS for physics
         lastTime = currentTime;
 
-        // Debug: Log large delta values that might cause instability
-        if (delta > 0.1) {
-            console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
+        // Simple frame counter to verify animation is running
+        frameCount++;
+        if (frameCount % 60 === 0) { // Every ~1 second at 60fps
+            console.log(`🎬 Animation running - frame ${frameCount}`);
         }
 
         // PHYSICS CONTROL - Mouse moves torso to test hinge constraints
         if (AmmoLib && physicsWorld) {
+            // Check if mouse has significant input
+            const hasInput = Math.abs(currentAnchorX) > 0.1 || Math.abs(currentAnchorZ) > 0.1;
+            if (frameCount % 60 === 0 && hasInput) {
+                console.log(`🖱️ Mouse input active: X=${currentAnchorX.toFixed(2)}, Z=${currentAnchorZ.toFixed(2)}`);
+            }
+
             // Apply mouse torques to tilt torso for testing hinge physics
             if (rigidBodies.torso) {
                 // Smooth interpolation to target position
@@ -1026,6 +1041,11 @@ function animate(currentTime = 0) {
 
             // Sync physics transforms to Three.js visuals
             syncPhysicsToThree();
+
+            // Periodic check if sync is working
+            if (frameCount % 120 === 0) { // Every 2 seconds
+                console.log(`🔄 Physics sync active - frame ${frameCount}`);
+            }
         }
 
         // PHYSICS → VISUAL SYNC (MANDATORY)
