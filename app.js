@@ -772,7 +772,8 @@ function createConstraints() {
         return;
     }
 
-    // STEP 5: ANCHOR ↔ TORSO HINGE - RE-ENABLED
+    // STEP 5: ANCHOR ↔ TORSO HINGE - DISABLED FOR FREE ROTATION TESTING
+    /*
     // Compute jointWorld from Blender Empty
     const jointWorld = new THREE.Vector3();
     jointEmptyRef.getWorldPosition(jointWorld);
@@ -804,6 +805,9 @@ function createConstraints() {
     physicsWorld.addConstraint(constraints.spinHinge, true);
 
     console.log('✅ Created anchor ↔ torso hinge constraint');
+    */
+
+    console.log('⏸️ Anchor ↔ torso hinge constraint DISABLED for free rotation testing');
 
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
