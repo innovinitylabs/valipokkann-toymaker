@@ -1322,21 +1322,35 @@ window.addEventListener('mouseup', onMouseUp);
 
 // Touch events for mobile devices
 window.addEventListener('touchstart', function(event) {
-    // Prevent scrolling and other default behaviors for touch interactions
-    event.preventDefault();
-    const touch = event.touches[0];
-    if (touch) {
-        onMouseDown(touch);
+    // Only prevent default if not touching the description box
+    const target = event.target;
+    const isDescriptionTouch = target.closest && target.closest('#instructions');
+
+    if (!isDescriptionTouch) {
+        // Prevent scrolling and other default behaviors for canvas interactions
+        event.preventDefault();
+        const touch = event.touches[0];
+        if (touch) {
+            onMouseDown(touch);
+        }
     }
+    // If touching description, let normal touch behavior happen
 }, { passive: false });
 
 window.addEventListener('touchend', function(event) {
-    // Prevent any default behaviors for touch end
-    event.preventDefault();
-    const touch = event.changedTouches[0];
-    if (touch) {
-        onMouseUp(touch);
+    // Only prevent default if not touching the description box
+    const target = event.target;
+    const isDescriptionTouch = target.closest && target.closest('#instructions');
+
+    if (!isDescriptionTouch) {
+        // Prevent any default behaviors for canvas touch end
+        event.preventDefault();
+        const touch = event.changedTouches[0];
+        if (touch) {
+            onMouseUp(touch);
+        }
     }
+    // If touching description, let normal touch behavior happen
 }, { passive: false });
 window.addEventListener('wheel', onMouseWheel, { passive: false });
 
