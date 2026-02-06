@@ -323,8 +323,12 @@ function initScene() {
 
                     // Limbs are already dynamic from creation - no kinematic switching needed
 
-                    // Enable gravity for realistic physics
-                    physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
+                    // Enable physics simulation after a brief delay to let everything settle
+                    setTimeout(() => {
+                        console.log('🌍 Enabling physics simulation');
+                        physicsEnabled = true;
+                        physicsEnableTime = performance.now();
+                    }, 200); // 200ms delay after gravity is enabled
                     
                     // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
                     physicsMeshMap = new Map();
@@ -1424,6 +1428,10 @@ let physicsMeshMap = new Map();
 // Toy references are initialized when GLTF loads
 // console.log('Motor-based Ammo.js jumping jack initialized');
 
+// Physics startup control
+let physicsEnabled = false;
+let physicsEnableTime = 0;
+
 // Mouse control state
 let mouseButtonDown = false;
 let lastMouseX = 0;
@@ -1616,7 +1624,10 @@ function animate(currentTime = 0) {
 
             // Step real physics simulation
             try {
-                physicsWorld.stepSimulation(delta, 10);
+                // Only run physics simulation if enabled and after initial stabilization period
+                if (physicsEnabled && (performance.now() - physicsEnableTime) > 100) { // 100ms buffer
+                    physicsWorld.stepSimulation(delta, 10);
+                }
 
                 // DEBUG: Check if constraints are being processed
                 // if (frameCount % 120 === 0) {
