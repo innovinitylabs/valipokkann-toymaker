@@ -1084,39 +1084,10 @@ function animate(currentTime = 0) {
 
             // Apply direct torque to torso for rotation
             if (mouseButtonDown) {
-                    // TEMP: Try direct torque first to verify physics works
-                    console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
                     const torque = 100.0 * currentRotationDirection; // Direct torque
                     rigidBodies.torso.applyTorque(new AmmoLib.btVector3(0, torque, 0));
-                    console.log(`✅ Applied direct torque: ${torque}`);
 
-                    // Check immediately after calling
-                    setTimeout(() => {
-                        if (rigidBodies.torso) {
-                            const angVel = rigidBodies.torso.getAngularVelocity();
-                            const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                            console.log(`🔄 IMMEDIATE CHECK: Angular velocity (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)}) speed=${speed.toFixed(3)}`);
-                        }
-                    }, 10);
 
-                    // VERIFY ANGULAR VELOCITY - hard failure check
-                    setTimeout(() => {
-                        if (rigidBodies.torso) {
-                            const angVel = rigidBodies.torso.getAngularVelocity();
-                            const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                            if (speed < 1.0) {
-                                console.error(`❌ HINGE MOTOR FAILURE: Angular velocity too low (${speed.toFixed(3)}), motor not working!`);
-                                console.error(`Angular velocity: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
-                            } else {
-                                console.log(`✅ Hinge motor working: Angular velocity ${speed.toFixed(3)}`);
-                            }
-                        }
-                    }, 100); // Check after physics has a chance to respond
-
-                    // DEBUG: Log direct torque
-                    if (frameCount % 60 === 0) {
-                        console.log(`🔄 DIRECT TORQUE: applied ${100.0 * currentRotationDirection}`);
-                    }
                 }
             }
 
