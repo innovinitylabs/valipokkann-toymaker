@@ -1479,7 +1479,7 @@ function animate(currentTime = 0) {
                         // Limit angular velocity during spinning to prevent excessive speed
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        const maxSpeed = window.physicsMode === 'elastic' ? 10.0 : 8.0;
+                        const maxSpeed = window.physicsMode === 'elastic' ? 12.0 : 8.0;
                         if (speed > maxSpeed) { // Mode-dependent max speed
                             const scale = maxSpeed / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
@@ -1490,8 +1490,9 @@ function animate(currentTime = 0) {
                         }
                     }
 
-                    // Apply torque for controlled spinning
-                    const torque = 100.0 * currentRotationDirection;
+                    // Apply torque for controlled spinning (mode-dependent)
+                    const baseTorque = window.physicsMode === 'elastic' ? 120.0 : 100.0;
+                    const torque = baseTorque * currentRotationDirection;
                     rigidBodies.torso.applyTorque(new AmmoLib.btVector3(0, torque, 0));
 
                     // Check immediately after calling
@@ -1532,7 +1533,7 @@ function animate(currentTime = 0) {
                         // Also limit angular velocity to prevent excessive spin
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        const maxDecelSpeed = window.physicsMode === 'elastic' ? 12.0 : 10.0;
+                        const maxDecelSpeed = window.physicsMode === 'elastic' ? 15.0 : 10.0;
                         if (speed > maxDecelSpeed) { // Mode-dependent max deceleration speed
                             const scale = maxDecelSpeed / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
