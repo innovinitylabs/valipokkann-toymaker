@@ -711,7 +711,8 @@ function createRigidBodies() {
             const { name, mesh, boundingBox, worldPosition, worldQuaternion } = meshInfo;
 
             // Skip certain meshes that shouldn't have collision (like very small parts)
-            if (name.includes('stick') || name.includes('string') || boundingBox.getSize(new THREE.Vector3()).length() < 0.1) {
+            // But allow stick to have collision as it's an important interactive part
+            if (name.includes('string') || (!name.includes('stick') && boundingBox.getSize(new THREE.Vector3()).length() < 0.1)) {
                 console.log(`⏭️ Skipping collision for small mesh: ${name}`);
                 return;
             }
@@ -720,6 +721,17 @@ function createRigidBodies() {
             console.log(`🔧 Creating collider for torso mesh "${name}"`);
 
             let shape;
+
+            // Special handling for stick - use capsule for better physics on thin objects
+            if (name.includes('stick')) {
+                const size = boundingBox.getSize(new THREE.Vector3());
+                // For sticks, use the longest dimension as height and thinner dimensions for radius
+                const height = Math.max(size.x, size.y, size.z);
+                const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
+
+                shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
+                console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+            }
             try {
                 // Try to create convex hull shape from mesh geometry
                 const geometry = mesh.geometry;
