@@ -867,27 +867,93 @@ function createRigidBodies() {
         ref.getWorldPosition(worldPos);
         ref.getWorldQuaternion(worldQuat);
 
+        // Create collision shape that matches limb mesh geometry
+        console.log(`🔧 Creating collider for limb mesh "${name}"`);
 
-        // Use capsule colliders for limbs (wooden rod physics)
-        // Measure limb dimensions manually for realistic wooden toy behavior
-        const radius = 0.08;      // thickness of wooden limb
-        const height = 1.2;       // length excluding caps
+        let shape;
+        try {
+            // Create convex hull shape from limb mesh geometry
+            const geometry = ref.geometry;
 
-        const shape = new AmmoLib.btCapsuleShape(radius, height);
+            // Ensure geometry has positions
+            if (!geometry.attributes.position) {
+                throw new Error('No position attribute in geometry');
+            }
 
-        // console.log(`🔧 Created capsule collider for ${name}: radius=${radius}, height=${height}`);
+            // Create convex hull shape from mesh vertices
+            const convexShape = new AmmoLib.btConvexHullShape();
+
+            // Get vertex positions from geometry
+            const positions = geometry.attributes.position.array;
+            const vertexCount = positions.length / 3;
+
+            if (vertexCount < 4) {
+                throw new Error('Not enough vertices for convex hull');
+            }
+
+            // Add vertices to convex hull (sample every Nth vertex for performance)
+            const samplingRate = Math.max(1, Math.floor(vertexCount / 50)); // Limit to ~50 vertices max for limbs
+            const margin = 0.015; // Smaller margin for limbs
+
+            let addedPoints = 0;
+            for (let i = 0; i < vertexCount; i += samplingRate) {
+                const x = positions[i * 3];
+                const y = positions[i * 3 + 1];
+                const z = positions[i * 3 + 2];
+
+                // Apply small outward offset for margin
+                const length = Math.sqrt(x*x + y*y + z*z);
+                const normalScale = length > 0.001 ? (length + margin) / length : 1.0 + margin;
+
+                convexShape.addPoint(new AmmoLib.btVector3(
+                    x * normalScale,
+                    y * normalScale,
+                    z * normalScale
+                ), true);
+                addedPoints++;
+            }
+
+            if (addedPoints < 4) {
+                throw new Error('Not enough points added to convex hull');
+            }
+
+            // Set collision margin and optimize
+            convexShape.setMargin(margin);
+            convexShape.recalcLocalAabb();
+
+            // Try to optimize if available
+            if (convexShape.optimizeConvexHull) {
+                convexShape.optimizeConvexHull();
+            }
+
+            // Validate convex hull
+            const numPoints = convexShape.getNumPoints();
+            if (numPoints < 4) {
+                throw new Error(`Convex hull has only ${numPoints} points, need at least 4`);
+            }
+
+            shape = convexShape;
+            console.log(`  ✅ Limb convex hull created with ${numPoints} points from ${vertexCount} vertices`);
+
+        } catch (error) {
+            // Fallback to capsule if convex hull fails
+            console.warn(`  ⚠️ Convex hull failed for limb "${name}": ${error.message}, using capsule`);
+
+            // Use capsule as fallback for limbs
+            const radius = 0.08;      // thickness of wooden limb
+            const height = 1.2;       // length excluding caps
+            shape = new AmmoLib.btCapsuleShape(radius, height);
+            console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
+        }
 
         // Calculate local inertia
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         shape.calculateLocalInertia(mass, localInertia);
 
-        // Create initial transform with proper capsule orientation
+        // Create initial transform matching mesh position and rotation
         const initialTransform = new AmmoLib.btTransform();
         initialTransform.setIdentity();
         initialTransform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
-
-        // Rotate capsule to match limb direction
-        // Capsules are Y-aligned by default, so apply the world rotation
         initialTransform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
 
 
@@ -919,6 +985,10 @@ function createRigidBodies() {
         }
 
         // Add limb to physics world with proper collision groups
+        // Debug: Log collision shape type
+        const shapeType = shape.constructor.name;
+        console.log(`  🎯 Added ${shapeType} collider for limb "${name}"`);
+
         physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB | GROUP_TORSO_PART); // Limbs collide with other limbs and torso parts
     });
 
