@@ -28,10 +28,11 @@
             left: 10px;
             background: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 10px;
+            padding: 15px;
             border-radius: 5px;
             font-size: 14px;
-            max-width: 300px;
+            min-width: 320px;
+            max-width: min(500px, calc(100vw - 20px));
             cursor: pointer;
             transition: all 0.3s ease;
         }
@@ -41,21 +42,23 @@
         }
 
         #instructions.expanded {
-            max-width: 600px;
+            max-width: min(800px, calc(100vw - 20px));
             max-height: 80vh;
             overflow-y: auto;
         }
 
         #instructions .short-desc {
             font-weight: bold;
-            font-size: 18px;
+            font-size: 16px;
             margin-bottom: 8px;
             text-align: center;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         #instructions .description {
-            font-size: 13px;
+            font-size: 12px;
             line-height: 1.4;
             margin-bottom: 10px;
             text-align: justify;
