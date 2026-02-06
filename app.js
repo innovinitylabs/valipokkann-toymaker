@@ -121,12 +121,22 @@ function validatePhysicsAuthority() {
     }
 
     // Check collision flags - should not be kinematic (CF_KINEMATIC_OBJECT = 2)
-    const flags = rigidBodies.torso.getCollisionFlags();
-    if (flags & 2) { // CF_KINEMATIC_OBJECT
+    const torsoFlags = rigidBodies.torso.getCollisionFlags();
+    if (torsoFlags & 2) { // CF_KINEMATIC_OBJECT
         throw new Error("❌ PHYSICS AUTHORITY VIOLATION: Torso is kinematic - must be dynamic!");
     }
 
-    console.log("✅ PHYSICS AUTHORITY VALIDATED: Torso is dynamic");
+    // Check that limbs are also dynamic
+    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+        if (rigidBodies[name]) {
+            const flags = rigidBodies[name].getCollisionFlags();
+            if (flags & 2) { // CF_KINEMATIC_OBJECT
+                throw new Error(`❌ PHYSICS AUTHORITY VIOLATION: ${name} is kinematic - must be dynamic!`);
+            }
+        }
+    });
+
+    console.log("✅ PHYSICS AUTHORITY VALIDATED: Torso and limbs are dynamic");
 }
 
 function safeSetWorldTransform(body, transform) {
@@ -168,6 +178,10 @@ function initializeAmmo() {
         // Store AmmoLib globally so all functions can access it
         AmmoLib = AmmoLibInstance;
         console.log('AmmoLib assigned, btVector3 available:', !!AmmoLib.btVector3);
+
+        // Hide loading overlay after Ammo initializes
+        hideLoading();
+
         initPhysics();
         initScene();
         animate();
@@ -304,15 +318,7 @@ function initScene() {
                 if (rigidBodies.anchor && rigidBodies.torso) {
                     createConstraints();
 
-                    // Now switch limbs from kinematic to dynamic (safe now that constraints are set)
-                    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
-                        if (rigidBodies[name]) {
-                            const flags = rigidBodies[name].getCollisionFlags();
-                            rigidBodies[name].setCollisionFlags(flags & ~2); // Remove CF_KINEMATIC_OBJECT
-                            // Force activation to ensure limbs respond to physics
-                            rigidBodies[name].activate(true);
-                        }
-                    });
+                    // Limbs are already dynamic from creation - no kinematic switching needed
 
                     // Enable gravity for realistic physics
                     physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
@@ -334,11 +340,8 @@ function initScene() {
                 console.error('❌ Cannot create physics bodies - bodyMainRef or physicsWorld missing');
             }
 
-            // Hide loading indicator
-            const loadingEl = document.getElementById('loading');
-            if (loadingEl) {
-                loadingEl.style.display = 'none';
-            }
+            // Hide loading overlay (backup call in case Ammo load didn't trigger it)
+            hideLoading();
 
             console.log('GLTF loaded successfully');
             console.log('Toy hierarchy:', toyGroupRef);
@@ -654,8 +657,9 @@ function createRigidBodies() {
         }
 
         // Torso stays dynamic (not kinematic) - only limbs are kinematic for manual control
-        // Set activation state
+        // Set activation state and damping once at creation
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
+        rigidBodies.torso.setDamping(0.02, 0.02); // Physically sane damping for hinge motor control
 
         // Add to physics world
         physicsWorld.addRigidBody(rigidBodies.torso, GROUP_TORSO, GROUP_LIMB); // Torso collides with limbs only
@@ -713,23 +717,40 @@ function createRigidBodies() {
 
         rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
 
-        // TEMPORARY: Make kinematic initially to prevent collision during setup
-        rigidBodies[name].setCollisionFlags(
-            rigidBodies[name].getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
-        );
+        // SAFETY CHECK: Ensure limb is NOT kinematic
+        const flags = rigidBodies[name].getCollisionFlags();
+        if (flags & 2) { // CF_KINEMATIC_OBJECT
+            console.error(`❌ ${name} was created as kinematic - this breaks physics!`);
+            throw new Error(`${name} must be dynamic from creation`);
+        }
+        console.log(`✅ ${name} created as dynamic body (flags: ${flags})`);
 
-        // Basic setup
-        rigidBodies[name].setDamping(0.1, 0.2); // Normal damping
-        rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION
-        rigidBodies[name].setSleepingThresholds(0, 0);
+        // Dynamic body setup - limbs must be dynamic from creation
+        rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
+        rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
+        rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
-        // Wood-like physics properties
-        rigidBodies[name].setFriction(0.6);
-        rigidBodies[name].setRollingFriction(0.4);
-        rigidBodies[name].setSpinningFriction(0.4);
-        rigidBodies[name].setRestitution(0.05); // Wood barely bounces
+        // Basic friction properties (conservative - only known working methods)
+        try {
+            rigidBodies[name].setFriction(0.6);
+            rigidBodies[name].setRestitution(0.05); // Wood barely bounces
+        } catch (e) {
+            console.warn(`Could not set physics properties for ${name}:`, e.message);
+        }
 
         physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB); // Limbs collide with other limbs only
+    });
+
+    // FINAL SAFETY CHECK: Ensure limbs are dynamic, not kinematic
+    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+        if (rigidBodies[name]) {
+            const flags = rigidBodies[name].getCollisionFlags();
+            if (flags & 2) { // CF_KINEMATIC_OBJECT
+                console.error(`❌ CRITICAL: ${name} is still kinematic! Physics will not work.`);
+                throw new Error(`${name} must be dynamic for articulated physics`);
+            }
+            console.log(`✅ ${name} confirmed dynamic (flags: ${flags})`);
+        }
     });
 
     console.log('📊 Rigid bodies summary:', {
@@ -746,39 +767,40 @@ function createRigidBodies() {
 function createConstraints() {
     console.log('🚀 createConstraints() called');
 
-    // Validate that we have the required bodies
+    // FAIL-FAST VALIDATION: Throw errors instead of silent returns
     if (!rigidBodies.torso) {
-        console.error('❌ No torso body found!');
-        return;
+        throw new Error('❌ CRITICAL: No torso body found - physics graph incomplete!');
     }
 
-    console.log('📊 Available rigid bodies:', Object.keys(rigidBodies).filter(key => rigidBodies[key]));
-    console.log('🔗 Creating motor-based hinge constraint...');
-
     if (!AmmoLib) {
-        console.error('❌ Cannot create constraints - AmmoLib not loaded');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - AmmoLib not loaded!');
     }
 
     if (!physicsWorld) {
-        console.error('❌ Cannot create constraints - physicsWorld not initialized');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - physicsWorld not initialized!');
     }
 
-    if (!rigidBodies.anchor || !rigidBodies.torso) {
-        console.error('❌ Cannot create constraints - anchor or torso body missing');
-        return;
+    if (!rigidBodies.anchor) {
+        throw new Error('❌ CRITICAL: Cannot create constraints - anchor body missing!');
     }
 
     if (!jointEmptyRef) {
-        console.error('❌ Cannot create constraints - joint Empty not found');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - joint Empty not found!');
     }
 
     if (!bodyMainRef) {
-        console.error('❌ Cannot create constraints - bodyMainRef not found');
-        return;
+        throw new Error('❌ CRITICAL: Cannot create constraints - bodyMainRef not found!');
     }
+
+    // Validate all limb rigid bodies exist
+    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+        if (!rigidBodies[name]) {
+            throw new Error(`❌ CRITICAL: ${name} rigid body missing - articulated physics impossible!`);
+        }
+    });
+
+    console.log('📊 Available rigid bodies:', Object.keys(rigidBodies).filter(key => rigidBodies[key]));
+    console.log('🔗 Creating motor-based hinge constraint...');
 
     // STEP 5: ANCHOR ↔ TORSO HINGE - ENABLED TO KEEP TORSO IN FRAME WITH GRAVITY
     // Compute jointWorld from Blender Empty
@@ -831,9 +853,11 @@ function createConstraints() {
 
 
     limbConstraints.forEach(({ name, ref, body, joint }) => {
-        if (!body || !ref) {
-            console.log(`❌ Skipping ${name} - body or ref missing`);
-            return;
+        if (!body) {
+            throw new Error(`❌ CRITICAL: ${name} rigid body missing - cannot create hinge constraint!`);
+        }
+        if (!ref) {
+            throw new Error(`❌ CRITICAL: ${name} Three.js reference missing - cannot create hinge constraint!`);
         }
 
         console.log(`🔧 Creating constraint for ${name}...`);
@@ -889,7 +913,7 @@ function createConstraints() {
             );
 
             // Disable angle limits to allow free rotation (important for centrifugal force!)
-            hinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.1, 0.1, 1.0); // Wide limits - full rotation allowed
+            hinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.01, 0.01, 1.0); // Very soft limits - minimal resistance
 
             // Add to physics world (disable collisions between connected bodies)
             physicsWorld.addConstraint(hinge, true);
@@ -903,6 +927,14 @@ function createConstraints() {
             console.error(`❌ Failed to create hinge constraint for ${name}:`, error);
         }
     });
+
+    // ENSURE CONSTRAINTS ARE ALWAYS CREATED - No silent failures
+    if (Object.keys(constraints).length === 0) {
+        throw new Error("❌ CRITICAL: NO CONSTRAINTS CREATED — PHYSICS GRAPH IS BROKEN!");
+    }
+
+    console.log(`✅ CONSTRAINTS CREATED: ${Object.keys(constraints).length} total`);
+    console.log("CONSTRAINT GRAPH:", Object.keys(constraints));
 }
 
 // Mouse interaction variables
@@ -918,6 +950,17 @@ const MOTOR_MAX_TORQUE = 15.0;  // Torque limit
 // Collision groups for proper limb-torso separation
 const GROUP_TORSO = 1;
 const GROUP_LIMB = 2;
+
+// Loading overlay management
+function hideLoading() {
+    const el = document.getElementById("loading");
+    if (el) {
+        el.style.display = "none";
+        console.log("✅ Loading overlay hidden");
+    } else {
+        console.warn("⚠️ Loading element not found");
+    }
+}
 
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
@@ -952,17 +995,17 @@ function onMouseMove(event) {
         lastMouseX = event.clientX;
 
         // Debug: Log mouse movement
-        if (Math.abs(deltaX) > 0.1) {
-            console.log(`🐭 Mouse move: deltaX=${deltaX.toFixed(1)}, currentDelta=${currentMouseDelta.toFixed(3)}`);
-        }
+        // if (Math.abs(deltaX) > 0.1) {
+        //     console.log(`🐭 Mouse move: deltaX=${deltaX.toFixed(1)}, currentDelta=${currentMouseDelta.toFixed(3)}`);
+        // }
     }
 
-    // Debug: Log mouse delta when button is down
-    if (mouseButtonDown && Math.abs(currentMouseDelta) > 0.001) {
-        if (frameCount % 30 === 0) { // Throttle logging
-            console.log(`🐭 Mouse delta: ${currentMouseDelta.toFixed(3)}`);
-        }
-    }
+        // Debug: Log mouse delta when button is down
+        // if (mouseButtonDown && Math.abs(currentMouseDelta) > 0.001) {
+        //     if (frameCount % 30 === 0) { // Throttle logging
+        //         console.log(`🐭 Mouse delta: ${currentMouseDelta.toFixed(3)}`);
+        //     }
+        // }
 }
 
 function onMouseDown(event) {
@@ -1026,50 +1069,42 @@ function animate(currentTime = 0) {
                 console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
             }
 
-            // Apply Y-axis rotation torque when mouse is clicked and dragged
-            if (rigidBodies.torso) {
-                // Apply sustained angular velocity for centrifugal force when mouse is clicked
-                if (rigidBodies.torso) {
-                    // Set damping to physically sane values (no conditionals)
-                    rigidBodies.torso.setDamping(0.02, 0.02);
+            // Control anchor↔torso hinge motor based on mouse input
+            if (constraints.spinHinge) {
+                if (mouseButtonDown) {
+                    // Enable motor with target angular speed (positive/negative based on direction)
+                    const targetAngularSpeed = 50.0 * currentRotationDirection;
+                    const maxMotorImpulse = 200.0; // Very high torque for strong centrifugal force
 
-                    // Apply sustained angular velocity when mouse is down
-                    if (mouseButtonDown) {
-                        const angularVelocityY = 10.0 * currentRotationDirection; // Direct velocity, not torque
+                    constraints.spinHinge.enableAngularMotor(true, targetAngularSpeed, maxMotorImpulse);
 
-                        // Set angular velocity directly (persistent spin)
-                        rigidBodies.torso.setAngularVelocity(
-                            new AmmoLib.btVector3(0, angularVelocityY, 0)
-                        );
-
-                        // DEBUG: Log occasionally
-                        if (frameCount % 60 === 0) {
-                            console.log(`🔄 SET ANGULAR VELOCITY: ${angularVelocityY} (direction: ${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'})`);
-                        }
-                    }
-
-                    // DEBUG: Check angular velocity periodically
+                    // DEBUG: Log motor activation
                     if (frameCount % 60 === 0) {
-                        const angVel = rigidBodies.torso.getAngularVelocity();
-                        console.log(`🔄 AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
+                        console.log(`🔄 HINGE MOTOR: enabled, speed=${targetAngularSpeed}, maxImpulse=${maxMotorImpulse}`);
                     }
+                } else {
+                    // Disable motor cleanly
+                    constraints.spinHinge.enableAngularMotor(false, 0, 0);
 
-        // Keep limbs lightly damped and active for centrifugal response
-                ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
-                    if (rigidBodies[name]) {
-                        rigidBodies[name].setDamping(0.01, 0.02); // Very light damping
-                        rigidBodies[name].activate(true); // Keep limbs active
-                        rigidBodies[name].setSleepingThresholds(0, 0);
-
-                        // DEBUG: Log limb positions during spin
-                        if (mouseButtonDown && frameCount % 60 === 0) {
-                            const pos = rigidBodies[name].getWorldTransform().getOrigin();
-                            console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
-                        }
+                    // DEBUG: Log motor deactivation
+                    if (frameCount % 60 === 0) {
+                        console.log(`🔄 HINGE MOTOR: disabled`);
                     }
-                });
                 }
             }
+
+            // Keep limbs active for centrifugal response (no per-frame damping changes)
+            ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                if (rigidBodies[name]) {
+                    rigidBodies[name].activate(true); // Keep limbs active
+
+                    // DEBUG: Log limb positions during spin
+                    if (mouseButtonDown && frameCount % 30 === 0) {
+                        const pos = rigidBodies[name].getWorldTransform().getOrigin();
+                        console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
+                    }
+                }
+            });
 
             // Step real physics simulation
             try {
@@ -1077,12 +1112,7 @@ function animate(currentTime = 0) {
 
                 // DEBUG: Check if constraints are being processed
                 if (frameCount % 120 === 0) {
-                    try {
-                        const numConstraints = physicsWorld.getNumConstraints();
-                        console.log(`🔗 Physics world has ${numConstraints} constraints`);
-                    } catch (e) {
-                        console.log('🔗 Could not get constraint count');
-                    }
+                    console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
                 }
             } catch (e) {
                 console.error('❌ Physics step failed:', e);
@@ -1094,7 +1124,7 @@ function animate(currentTime = 0) {
 
             // Periodic check if sync is working
             if (frameCount % 120 === 0) { // Every 2 seconds
-                console.log(`🔄 Physics sync active - frame ${frameCount}`);
+                // console.log(`🔄 Physics sync active - frame ${frameCount}`);
             }
         }
 
