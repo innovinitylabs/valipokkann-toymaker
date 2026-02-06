@@ -710,10 +710,14 @@ function createRigidBodies() {
         window.torsoMeshes.forEach((meshInfo, index) => {
             const { name, mesh, boundingBox, worldPosition, worldQuaternion } = meshInfo;
 
-            // Skip certain meshes that shouldn't have collision (like very small parts)
-            // But allow stick to have collision as it's an important interactive part
-            if (name.includes('string') || (!name.includes('stick') && boundingBox.getSize(new THREE.Vector3()).length() < 0.1)) {
-                console.log(`⏭️ Skipping collision for small mesh: ${name}`);
+            // Skip only truly irrelevant meshes (strings, very tiny decorative parts)
+            // Include body panels, slabs, and structural elements for collision
+            const size = boundingBox.getSize(new THREE.Vector3());
+            const shouldSkip = name.includes('string') ||
+                              (size.x < 0.05 && size.y < 0.05 && size.z < 0.05 && !name.includes('stick'));
+
+            if (shouldSkip) {
+                console.log(`⏭️ Skipping collision for irrelevant mesh: ${name} (size: ${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
                 return;
             }
 
@@ -721,16 +725,38 @@ function createRigidBodies() {
             console.log(`🔧 Creating collider for torso mesh "${name}"`);
 
             let shape;
+            const size = boundingBox.getSize(new THREE.Vector3());
 
-            // Special handling for stick - use capsule for better physics on thin objects
+            // Special handling for different mesh types
             if (name.includes('stick')) {
-                const size = boundingBox.getSize(new THREE.Vector3());
-                // For sticks, use the longest dimension as height and thinner dimensions for radius
+                // For sticks, use capsule for better physics on thin objects
                 const height = Math.max(size.x, size.y, size.z);
                 const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
 
                 shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
                 console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+
+            } else if (size.x / Math.max(size.y, size.z) > 3 ||
+                       size.y / Math.max(size.x, size.z) > 3 ||
+                       size.z / Math.max(size.x, size.y) > 3) {
+                // Elongated shape (like sticks) - use capsule
+                const height = Math.max(size.x, size.y, size.z);
+                const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
+
+                shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
+                console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
+
+            } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.1) {
+                // Very thin slab (one dimension much smaller than others) - use box for precise collision
+                const padding = 0.01; // Smaller padding for slabs
+                const halfExtents = new AmmoLib.btVector3(
+                    (size.x * 0.5) + padding,
+                    (size.y * 0.5) + padding,
+                    (size.z * 0.5) + padding
+                );
+
+                shape = new AmmoLib.btBoxShape(halfExtents);
+                console.log(`    📦 Using box for thin slab: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
             }
             try {
                 // Try to create convex hull shape from mesh geometry
