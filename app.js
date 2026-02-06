@@ -752,9 +752,12 @@ function createRigidBodies() {
                 shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
                 console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
 
-            } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.1) {
-                // Very thin slab (one dimension much smaller than others) - use box for precise collision
-                const padding = 0.01; // Smaller padding for slabs
+            } else if (Math.min(size.x, size.y, size.z) / Math.max(size.x, size.y, size.z) < 0.15 ||
+                       vertexCount < 10 ||
+                       size.x < 0.3 || size.y < 0.3 || size.z < 0.3) {
+                // Skip convex hull for problematic cases: very thin, small, or low-poly meshes
+                // Use simple box instead to avoid physics issues with irregular shapes
+                const padding = 0.01;
                 const halfExtents = new AmmoLib.btVector3(
                     (size.x * 0.5) + padding,
                     (size.y * 0.5) + padding,
@@ -762,7 +765,7 @@ function createRigidBodies() {
                 );
 
                 shape = new AmmoLib.btBoxShape(halfExtents);
-                console.log(`    📦 Using box for thin slab: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                console.log(`    📦 Using box (skipping convex hull): size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), vertices=${vertexCount}`);
             }
             try {
                 // Try to create convex hull shape from mesh geometry
@@ -911,84 +914,15 @@ function createRigidBodies() {
         ref.getWorldPosition(worldPos);
         ref.getWorldQuaternion(worldQuat);
 
-        // Create collision shape that matches limb mesh geometry
+        // Create collision shape for limbs - use capsule for reliability
         console.log(`🔧 Creating collider for limb mesh "${name}"`);
 
-        let shape;
-        try {
-            // Create convex hull shape from limb mesh geometry
-            const geometry = ref.geometry;
-
-            // Ensure geometry has positions
-            if (!geometry.attributes.position) {
-                throw new Error('No position attribute in geometry');
-            }
-
-            // Create convex hull shape from mesh vertices
-            const convexShape = new AmmoLib.btConvexHullShape();
-
-            // Get vertex positions from geometry
-            const positions = geometry.attributes.position.array;
-            const vertexCount = positions.length / 3;
-
-            if (vertexCount < 4) {
-                throw new Error('Not enough vertices for convex hull');
-            }
-
-            // Add vertices to convex hull (sample every Nth vertex for performance)
-            const samplingRate = Math.max(1, Math.floor(vertexCount / 50)); // Limit to ~50 vertices max for limbs
-            const margin = 0.015; // Smaller margin for limbs
-
-            let addedPoints = 0;
-            for (let i = 0; i < vertexCount; i += samplingRate) {
-                const x = positions[i * 3];
-                const y = positions[i * 3 + 1];
-                const z = positions[i * 3 + 2];
-
-                // Apply small outward offset for margin
-                const length = Math.sqrt(x*x + y*y + z*z);
-                const normalScale = length > 0.001 ? (length + margin) / length : 1.0 + margin;
-
-                convexShape.addPoint(new AmmoLib.btVector3(
-                    x * normalScale,
-                    y * normalScale,
-                    z * normalScale
-                ), true);
-                addedPoints++;
-            }
-
-            if (addedPoints < 4) {
-                throw new Error('Not enough points added to convex hull');
-            }
-
-            // Set collision margin and optimize
-            convexShape.setMargin(margin);
-            convexShape.recalcLocalAabb();
-
-            // Try to optimize if available
-            if (convexShape.optimizeConvexHull) {
-                convexShape.optimizeConvexHull();
-            }
-
-            // Validate convex hull
-            const numPoints = convexShape.getNumPoints();
-            if (numPoints < 4) {
-                throw new Error(`Convex hull has only ${numPoints} points, need at least 4`);
-            }
-
-            shape = convexShape;
-            console.log(`  ✅ Limb convex hull created with ${numPoints} points from ${vertexCount} vertices`);
-
-        } catch (error) {
-            // Fallback to capsule if convex hull fails
-            console.warn(`  ⚠️ Convex hull failed for limb "${name}": ${error.message}, using capsule`);
-
-            // Use capsule as fallback for limbs
-            const radius = 0.08;      // thickness of wooden limb
-            const height = 1.2;       // length excluding caps
-            shape = new AmmoLib.btCapsuleShape(radius, height);
-            console.log(`    📏 Using capsule: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
-        }
+        // For limbs, always use capsule for consistent, reliable physics
+        // Limbs are typically cylindrical/rod-like shapes that work well with capsules
+        const radius = 0.08;      // thickness of wooden limb
+        const height = 1.2;       // length excluding caps
+        const shape = new AmmoLib.btCapsuleShape(radius, height);
+        console.log(`    📏 Using capsule for limb: radius=${radius.toFixed(3)}, height=${height.toFixed(3)}`);
 
         // Calculate local inertia
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
