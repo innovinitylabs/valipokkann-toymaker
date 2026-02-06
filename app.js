@@ -1081,13 +1081,23 @@ function animate(currentTime = 0) {
                     // Reset to low damping for free spinning when mouse is down
                     if (rigidBodies.torso) {
                         rigidBodies.torso.setDamping(0.02, 0.02); // Low damping for spinning
+
+                        // Limit angular velocity during spinning to prevent excessive speed
+                        const angVel = rigidBodies.torso.getAngularVelocity();
+                        const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
+                        if (speed > 12.0) { // Reasonable max speed during active spinning
+                            const scale = 12.0 / speed;
+                            rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
+                                angVel.x() * scale,
+                                angVel.y() * scale,
+                                angVel.z() * scale
+                            ));
+                        }
                     }
 
-                    // TEMP: Try direct torque first to verify physics works
-                    // console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
-                    const torque = 100.0 * currentRotationDirection; // Direct torque
+                    // Apply torque for controlled spinning
+                    const torque = 100.0 * currentRotationDirection;
                     rigidBodies.torso.applyTorque(new AmmoLib.btVector3(0, torque, 0));
-                    // console.log(`✅ Applied direct torque: ${torque}`);
 
                     // Check immediately after calling
                     // setTimeout(() => {
@@ -1120,10 +1130,29 @@ function animate(currentTime = 0) {
                     // Disable motor cleanly
                     constraints.spinHinge.enableAngularMotor(false, 0, 0);
 
-                    // Apply strong damping to bring toy to rest when mouse is released
+                    // Apply very strong damping to bring toy to rest when mouse is released
                     if (rigidBodies.torso) {
-                        rigidBodies.torso.setDamping(0.8, 0.9); // Strong damping to stop quickly
+                        rigidBodies.torso.setDamping(0.95, 0.98); // Very strong damping to stop very quickly
+
+                        // Also limit angular velocity to prevent excessive spin
+                        const angVel = rigidBodies.torso.getAngularVelocity();
+                        const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
+                        if (speed > 15.0) { // Limit max rotation speed
+                            const scale = 15.0 / speed;
+                            rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
+                                angVel.x() * scale,
+                                angVel.y() * scale,
+                                angVel.z() * scale
+                            ));
+                        }
                     }
+
+                    // Also increase limb damping to help stop rotation
+                    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                        if (rigidBodies[name]) {
+                            rigidBodies[name].setDamping(0.3, 0.4); // Higher damping on limbs when stopping
+                        }
+                    });
 
                     // DEBUG: Log motor deactivation
                     // if (frameCount % 60 === 0) {
@@ -1132,16 +1161,15 @@ function animate(currentTime = 0) {
                 }
             }
 
-            // Keep limbs active for centrifugal response (no per-frame damping changes)
+            // Keep limbs active for centrifugal response (damping managed above)
             ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
                 if (rigidBodies[name]) {
                     rigidBodies[name].activate(true); // Keep limbs active
 
-                    // DEBUG: Log limb positions during spin
-                    // if (mouseButtonDown && frameCount % 30 === 0) {
-                    //     const pos = rigidBodies[name].getWorldTransform().getOrigin();
-                    //     console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
-                    // }
+                    // Reset limb damping when spinning (if not already set above)
+                    if (mouseButtonDown && rigidBodies[name].getLinearDamping() > 0.1) {
+                        rigidBodies[name].setDamping(0.005, 0.01); // Reset to low damping for spinning
+                    }
                 }
             });
 
