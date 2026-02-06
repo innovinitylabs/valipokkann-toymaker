@@ -207,8 +207,11 @@ function initPhysics() {
         const collisionConfig = new AmmoLib.btDefaultCollisionConfiguration();
         const dispatcher = new AmmoLib.btCollisionDispatcher(collisionConfig);
 
-        // Create broadphase
-        const broadphase = new AmmoLib.btDbvtBroadphase();
+        // Create broadphase - try AxisSweep3 for better dynamic collision detection
+        const broadphase = new AmmoLib.btAxisSweep3(
+            new AmmoLib.btVector3(-100, -100, -100),
+            new AmmoLib.btVector3(100, 100, 100)
+        );
 
         // Create constraint solver (iterations configured in stepSimulation)
         const solver = new AmmoLib.btSequentialImpulseConstraintSolver();
@@ -601,6 +604,34 @@ function createRigidBodies() {
 
         physicsWorld.addRigidBody(rigidBodies.anchor, GROUP_TORSO, GROUP_TORSO); // Anchor collides with everything
         // console.log('✅ Created static anchor body (kinematic, follows cursor)');
+
+        // DEBUG: Add two test collision bodies to verify collision detection works
+        {
+            const testBody1 = new AmmoLib.btRigidBody(new AmmoLib.btRigidBodyConstructionInfo(
+                0, // static
+                new AmmoLib.btDefaultMotionState(new AmmoLib.btTransform(
+                    new AmmoLib.btQuaternion(0, 0, 0, 1),
+                    new AmmoLib.btVector3(0, 0, 0)
+                )),
+                new AmmoLib.btBoxShape(new AmmoLib.btVector3(0.5, 0.5, 0.5))
+            ));
+            testBody1.setActivationState(4);
+
+            const testBody2 = new AmmoLib.btRigidBody(new AmmoLib.btRigidBodyConstructionInfo(
+                0, // static
+                new AmmoLib.btDefaultMotionState(new AmmoLib.btTransform(
+                    new AmmoLib.btQuaternion(0, 0, 0, 1),
+                    new AmmoLib.btVector3(0.8, 0, 0) // Should overlap with testBody1
+                )),
+                new AmmoLib.btBoxShape(new AmmoLib.btVector3(0.5, 0.5, 0.5))
+            ));
+            testBody2.setActivationState(4);
+
+            physicsWorld.addRigidBody(testBody1);
+            physicsWorld.addRigidBody(testBody2);
+
+            console.log('Added test collision bodies - should generate contact manifolds if collision detection works');
+        }
     }
 
     // STEP 4: CREATE DYNAMIC TORSO BODY
@@ -777,9 +808,11 @@ function createRigidBodies() {
         initialTransform.setIdentity();
         initialTransform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
 
-        // Rotate capsule to match limb direction (assuming limbs extend along Y-axis from shoulder/hip)
-        // Capsules are Y-aligned by default, so no additional rotation needed if limbs point up
+        // Rotate capsule to match limb direction
+        // Capsules are Y-aligned by default, so apply the world rotation
         initialTransform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
+
+        console.log(`Limb ${name} rotation: (${worldQuat.x.toFixed(3)}, ${worldQuat.y.toFixed(3)}, ${worldQuat.z.toFixed(3)}, ${worldQuat.w.toFixed(3)})`);
 
         // Create motion state with initial transform
         const motionState = new AmmoLib.btDefaultMotionState(initialTransform);
@@ -811,8 +844,8 @@ function createRigidBodies() {
         // DEBUG: Test limb-to-limb collision
         console.log(`Adding limb ${name} to physics world: group=${GROUP_LIMB}, mask=${GROUP_LIMB | GROUP_TORSO_PART}`);
         console.log(`Limb ${name} created with mass=${mass}, radius=${radius}, height=${height}`);
-        // TEMP: Disable collision groups to test if collision detection works at all
-        physicsWorld.addRigidBody(rigidBodies[name], 1, -1); // Belong to group 1, collide with everything
+        // TEMP: Test with no collision filtering at all
+        physicsWorld.addRigidBody(rigidBodies[name]); // No collision filtering - should collide with everything
 
         // TEMP: Force collision by setting mask to collide with everything
         // physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, -1); // Collide with all groups
@@ -1246,6 +1279,21 @@ function animate(currentTime = 0) {
             // Step real physics simulation
             try {
                 physicsWorld.stepSimulation(delta, 10);
+
+                // DEBUG: Check for collision pairs
+                if (frameCount % 60 === 0) { // Every second
+                    const dispatcher = physicsWorld.getDispatcher();
+                    const numManifolds = dispatcher.getNumManifolds();
+                    console.log(`Physics step: ${numManifolds} collision manifolds detected`);
+
+                    for (let i = 0; i < numManifolds; i++) {
+                        const contactManifold = dispatcher.getManifoldByIndexInternal(i);
+                        const body0 = contactManifold.getBody0();
+                        const body1 = contactManifold.getBody1();
+                        const numContacts = contactManifold.getNumContacts();
+                        console.log(`Collision between bodies with ${numContacts} contact points`);
+                    }
+                }
 
                 // DEBUG: Check if constraints are being processed
                 // if (frameCount % 120 === 0) {
