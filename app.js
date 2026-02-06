@@ -1399,6 +1399,11 @@ let physicsMeshMap = new Map();
 // Toy references are initialized when GLTF loads
 // console.log('Motor-based Ammo.js jumping jack initialized');
 
+// Display follow message in console
+console.log('🎨 Elastic Memory – becoming a Toymaker');
+console.log('👤 Follow valipokkann on Instagram: https://instagram.com/valiipokkann');
+console.log('🔗 GitHub: https://github.com/innovinitylabs/valipokkann-toymaker');
+
 // Mouse control state
 let mouseButtonDown = false;
 let lastMouseX = 0;
