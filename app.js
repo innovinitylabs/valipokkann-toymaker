@@ -1590,12 +1590,12 @@ function syncPhysicsToThree() {
                 if (frameCount % 60 === 0) { // Every second
                     // console.log(`🔄 Torso visual: pos(${p.x().toFixed(2)}, ${p.y().toFixed(2)}, ${p.z().toFixed(3)}, ${p.w().toFixed(3)}) rot(${q.x().toFixed(3)}, ${q.y().toFixed(3)}, ${q.z().toFixed(3)}, ${q.w().toFixed(3)})`);
                 }
-            } catch (e) {
-                console.error('❌ Error getting torso transform:', e);
-                return;
+            } else {
+                console.warn('⚠️ Torso motion state is null or invalid');
             }
-        } else {
-            console.warn('⚠️ Torso motion state is null');
+        } catch (e) {
+            console.error('❌ Error syncing torso transform:', e);
+            return;
         }
     }
 
