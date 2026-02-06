@@ -725,7 +725,6 @@ function createRigidBodies() {
             console.log(`🔧 Creating collider for torso mesh "${name}"`);
 
             let shape;
-            const size = boundingBox.getSize(new THREE.Vector3());
 
             // Special handling for different mesh types
             if (name.includes('stick')) {
