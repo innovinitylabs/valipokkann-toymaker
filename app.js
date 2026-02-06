@@ -1087,46 +1087,46 @@ function animate(currentTime = 0) {
                 // console.log(`🔗 spinHinge constraint exists: ${!!constraints.spinHinge}`);
                 if (mouseButtonDown) {
                     // TEMP: Try direct torque first to verify physics works
-                    console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
+                    // console.log(`🔄 APPLYING DIRECT TORQUE INSTEAD OF MOTOR`);
                     const torque = 100.0 * currentRotationDirection; // Direct torque
                     rigidBodies.torso.applyTorque(new AmmoLib.btVector3(0, torque, 0));
-                    console.log(`✅ Applied direct torque: ${torque}`);
+                    // console.log(`✅ Applied direct torque: ${torque}`);
 
                     // Check immediately after calling
-                    setTimeout(() => {
-                        if (rigidBodies.torso) {
-                            const angVel = rigidBodies.torso.getAngularVelocity();
-                            const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                            console.log(`🔄 IMMEDIATE CHECK: Angular velocity (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)}) speed=${speed.toFixed(3)}`);
-                        }
-                    }, 10);
+                    // setTimeout(() => {
+                    //     if (rigidBodies.torso) {
+                    //         const angVel = rigidBodies.torso.getAngularVelocity();
+                    //         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
+                    //         console.log(`🔄 IMMEDIATE CHECK: Angular velocity (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)}) speed=${speed.toFixed(3)}`);
+                    //     }
+                    // }, 10);
 
                     // VERIFY ANGULAR VELOCITY - hard failure check
-                    setTimeout(() => {
-                        if (rigidBodies.torso) {
-                            const angVel = rigidBodies.torso.getAngularVelocity();
-                            const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                            if (speed < 1.0) {
-                                console.error(`❌ HINGE MOTOR FAILURE: Angular velocity too low (${speed.toFixed(3)}), motor not working!`);
-                                console.error(`Angular velocity: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
-                            } else {
-                                console.log(`✅ Hinge motor working: Angular velocity ${speed.toFixed(3)}`);
-                            }
-                        }
-                    }, 100); // Check after physics has a chance to respond
+                    // setTimeout(() => {
+                    //     if (rigidBodies.torso) {
+                    //         const angVel = rigidBodies.torso.getAngularVelocity();
+                    //         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
+                    //         if (speed < 1.0) {
+                    //             console.error(`❌ HINGE MOTOR FAILURE: Angular velocity too low (${speed.toFixed(3)}), motor not working!`);
+                    //             console.error(`Angular velocity: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
+                    //         } else {
+                    //             console.log(`✅ Hinge motor working: Angular velocity ${speed.toFixed(3)}`);
+                    //         }
+                    //     }
+                    // }, 100); // Check after physics has a chance to respond
 
                     // DEBUG: Log motor activation
-                    if (frameCount % 60 === 0) {
-                        console.log(`🔄 HINGE MOTOR: enabled, speed=${targetAngularSpeed}, maxImpulse=${maxMotorImpulse}`);
-                    }
+                    // if (frameCount % 60 === 0) {
+                    //     console.log(`🔄 HINGE MOTOR: enabled, speed=${targetAngularSpeed}, maxImpulse=${maxMotorImpulse}`);
+                    // }
                 } else {
                     // Disable motor cleanly
                     constraints.spinHinge.enableAngularMotor(false, 0, 0);
 
                     // DEBUG: Log motor deactivation
-                    if (frameCount % 60 === 0) {
-                        console.log(`🔄 HINGE MOTOR: disabled`);
-                    }
+                    // if (frameCount % 60 === 0) {
+                    //     console.log(`🔄 HINGE MOTOR: disabled`);
+                    // }
                 }
             }
 
@@ -1136,10 +1136,10 @@ function animate(currentTime = 0) {
                     rigidBodies[name].activate(true); // Keep limbs active
 
                     // DEBUG: Log limb positions during spin
-                    if (mouseButtonDown && frameCount % 30 === 0) {
-                        const pos = rigidBodies[name].getWorldTransform().getOrigin();
-                        console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
-                    }
+                    // if (mouseButtonDown && frameCount % 30 === 0) {
+                    //     const pos = rigidBodies[name].getWorldTransform().getOrigin();
+                    //     console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
+                    // }
                 }
             });
 
