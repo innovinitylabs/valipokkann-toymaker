@@ -241,6 +241,9 @@
             • Scroll wheel to zoom in/out<br>
             • Real physics: gravity, rigid bodies, hinge constraints, centrifugal force!
         </div>
+        <div class="reset-section">
+            <button id="resetButton" style="padding: 8px 16px; background: rgba(255,0,0,0.7); color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">🔄 Reset Toy</button>
+        </div>
         <div class="click-hint">Click for artist statement</div>
 
         <div class="full-desc">
@@ -330,9 +333,10 @@
             }
         }, 1000);
 
-        // Handle expandable description
+        // Handle expandable description and reset button
         document.addEventListener('DOMContentLoaded', function() {
             const instructions = document.getElementById('instructions');
+            const resetButton = document.getElementById('resetButton');
 
             // Handle both click and touch events for better mobile support
             function toggleDescription(event) {
@@ -371,6 +375,15 @@
                     event.stopPropagation();
                 }
             }, { passive: true });
+
+            // Reset button functionality
+            if (resetButton) {
+                resetButton.addEventListener('click', function() {
+                    if (window.resetToy) {
+                        window.resetToy();
+                    }
+                });
+            }
         });
     </script>
     <script src="app.js"></script>

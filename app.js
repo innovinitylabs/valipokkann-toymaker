@@ -689,6 +689,13 @@ function createRigidBodies() {
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies.torso.setDamping(0.02, 0.02); // Physically sane damping for hinge motor control
 
+        // Store initial state for reset functionality
+        initialStates.torso = {
+            position: worldPos.clone(),
+            quaternion: worldQuat.clone(),
+            transform: transform
+        };
+
         // Add to physics world - torso core does NOT collide with anything (mass/inertia/constraints only)
         physicsWorld.addRigidBody(rigidBodies.torso, GROUP_TORSO, 0); // Torso collides with nothing
 
@@ -1008,6 +1015,13 @@ function createRigidBodies() {
         }
         // console.log(`✅ ${name} created as dynamic body (flags: ${flags})`);
 
+        // Store initial state for reset functionality
+        initialStates[name] = {
+            position: worldPos.clone(),
+            quaternion: worldQuat.clone(),
+            transform: initialTransform
+        };
+
         // Dynamic body setup - limbs must be dynamic from creation
         rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
@@ -1291,6 +1305,66 @@ function createConstraints() {
     }
 }
 
+// Reset toy to initial state
+function resetToy() {
+    console.log('🔄 Resetting toy to initial state...');
+
+    // Reset torso
+    if (rigidBodies.torso && initialStates.torso) {
+        const { position, quaternion, transform } = initialStates.torso;
+
+        // Reset physics body
+        rigidBodies.torso.setWorldTransform(transform);
+        rigidBodies.torso.setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+        rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+        rigidBodies.torso.clearForces();
+        rigidBodies.torso.setActivationState(1); // ACTIVE_TAG to wake up
+
+        // Reset Three.js mesh
+        if (bodyMainRef) {
+            bodyMainRef.position.copy(position);
+            bodyMainRef.quaternion.copy(quaternion);
+        }
+    }
+
+    // Reset limbs
+    const limbNames = ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+    limbNames.forEach(name => {
+        if (rigidBodies[name] && initialStates[name]) {
+            const { position, quaternion, transform } = initialStates[name];
+            const ref = name === 'leftArm' ? leftArmRef :
+                       name === 'rightArm' ? rightArmRef :
+                       name === 'leftLeg' ? leftLegRef : rightLegRef;
+
+            // Reset physics body
+            rigidBodies[name].setWorldTransform(transform);
+            rigidBodies[name].setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
+            rigidBodies[name].setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+            rigidBodies[name].clearForces();
+            rigidBodies[name].setActivationState(1); // ACTIVE_TAG to wake up
+
+            // Reset Three.js mesh
+            if (ref) {
+                ref.position.copy(position);
+                ref.quaternion.copy(quaternion);
+            }
+        }
+    });
+
+    // Reset torso mesh colliders (they follow their meshes, so they'll be updated in next sync)
+    // Reset pivot colliders (they follow joint positions, so they'll be updated in next sync)
+
+    // Reset mouse interaction state
+    mouseButtonDown = false;
+    mouseMoving = false;
+    currentRotationDirection = 1;
+
+    console.log('✅ Toy reset complete');
+}
+
+// Make reset function globally available
+window.resetToy = resetToy;
+
 // Mouse interaction variables
 const mouse = new THREE.Vector2();
 
@@ -1305,6 +1379,9 @@ const MOTOR_MAX_TORQUE = 15.0;  // Torque limit
 const GROUP_TORSO = 1;
 const GROUP_LIMB = 2;
 const GROUP_TORSO_PART = 4; // New group for torso collision proxies
+
+// Global storage for initial states (used for reset functionality)
+let initialStates = {};
 
 // Loading overlay management
 function hideLoading() {
