@@ -147,11 +147,8 @@ let leftArmRef, rightArmRef, leftLegRef, rightLegRef;
 let leftHandConstraint, rightHandConstraint, leftLegConstraint, rightLegConstraint;
 let torsoToEmptyOffset = new THREE.Vector3(); // Offset from torso mesh to Empty (for visual sync)
 
-// Hinge pivot objects - positioned at constraint locations
-let leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot;
-
 // Debug gizmos for coordinate systems
-let globalAxesHelper, torsoAxesHelper, leftArmAxesHelper, rightArmAxesHelper;
+let globalAxesHelper, torsoAxesHelper;
 
 // STEP 1: Load Ammo.js using CDN and initialize physics
 function initializeAmmo() {
@@ -210,8 +207,11 @@ function initPhysics() {
             collisionConfig
         );
 
-        // Set gravity (negative Y in Three.js = down)
-        physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
+        // Set gravity (temporarily disabled for debugging hinge constraints)
+        physicsWorld.setGravity(new AmmoLib.btVector3(0, 0, 0)); // DISABLED GRAVITY
+
+        // DEBUG: Check rigid body count
+        console.log('🔢 Physics world initialized with gravity:', physicsWorld.getGravity().y());
 
         console.log('✅ Physics world created with gravity:', physicsWorld.getGravity().y());
         console.log('✅ Solver iterations configured');
@@ -274,28 +274,14 @@ function initScene() {
             // Find toy parts in the hierarchy
             findToyParts(toyGroupRef);
 
-            // 🔧 MANUAL CONTROL: Create hinge pivots at constraint locations
+            // 🔧 PHYSICS CONTROL: Detach limbs to world space for independent physics sync
             if (bodyMainRef) {
-                // Create pivot objects positioned at constraint locations
-                if (leftHandConstraint) {
-                    leftArmPivot = new THREE.Object3D();
-                    leftHandConstraint.getWorldPosition(leftArmPivot.position);
-                    bodyMainRef.attach(leftArmPivot);
-                    if (leftArmRef) leftArmPivot.attach(leftArmRef);
-                    console.log('✅ Created left arm hinge pivot at:', leftArmPivot.position);
-                }
-
-                if (rightHandConstraint) {
-                    rightArmPivot = new THREE.Object3D();
-                    rightHandConstraint.getWorldPosition(rightArmPivot.position);
-                    bodyMainRef.attach(rightArmPivot);
-                    if (rightArmRef) rightArmPivot.attach(rightArmRef);
-                    console.log('✅ Created right arm hinge pivot at:', rightArmPivot.position);
-                }
-
-                // Keep legs in world space for now (they might need different handling)
+                // Detach arms to world space (required for physics sync)
+                if (leftArmRef) scene.attach(leftArmRef);
+                if (rightArmRef) scene.attach(rightArmRef);
                 if (leftLegRef) scene.attach(leftLegRef);
                 if (rightLegRef) scene.attach(rightLegRef);
+
             }
 
             // Add coordinate system gizmos for debugging
@@ -303,32 +289,12 @@ function initScene() {
             globalAxesHelper = createLabeledAxesHelper(2, 0.15); // 2 units long, 0.15 label size
             globalAxesHelper.position.set(0, 0, 0);
             scene.add(globalAxesHelper);
-            console.log('✅ Added global coordinate system gizmo (red=X, green=Y, blue=Z)');
 
             if (bodyMainRef) {
                 torsoAxesHelper = createLabeledAxesHelper(1, 0.08); // 1 unit long, 0.08 label size
                 bodyMainRef.add(torsoAxesHelper);
-                console.log('✅ Added torso coordinate system gizmo');
             }
 
-            if (leftArmPivot) {
-                leftArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
-                leftArmPivot.add(leftArmAxesHelper);
-                console.log('✅ Added left arm hinge coordinate system gizmo');
-            }
-
-            if (rightArmPivot) {
-                rightArmAxesHelper = createLabeledAxesHelper(0.5, 0.05); // 0.5 units long, 0.05 label size
-                rightArmPivot.add(rightArmAxesHelper);
-                console.log('✅ Added right arm hinge coordinate system gizmo');
-            }
-
-            console.log('✅ Hinge pivots created:', {
-                leftArmPivot: !!leftArmPivot,
-                rightArmPivot: !!rightArmPivot,
-                leftLeg: leftLegRef?.parent === scene,
-                rightLeg: rightLegRef?.parent === scene
-            });
 
             // Create physics bodies (only after GLTF loads and bodyMainRef is found)
             if (bodyMainRef && physicsWorld) {
@@ -337,6 +303,19 @@ function initScene() {
                 // Create constraints (only if bodies were created successfully)
                 if (rigidBodies.anchor && rigidBodies.torso) {
                     createConstraints();
+
+                    // Now switch limbs from kinematic to dynamic (safe now that constraints are set)
+                    ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                        if (rigidBodies[name]) {
+                            const flags = rigidBodies[name].getCollisionFlags();
+                            rigidBodies[name].setCollisionFlags(flags & ~2); // Remove CF_KINEMATIC_OBJECT
+                            // Force activation to ensure limbs respond to physics
+                            rigidBodies[name].activate(true);
+                        }
+                    });
+
+                    // Enable gravity for realistic physics
+                    physicsWorld.setGravity(new AmmoLib.btVector3(0, -9.8, 0));
                     
                     // CREATE PHYSICS ↔ MESH MAP (MANDATORY)
                     physicsMeshMap = new Map();
@@ -617,7 +596,7 @@ function createRigidBodies() {
         );
         rigidBodies.anchor.setActivationState(4); // DISABLE_DEACTIVATION
 
-        physicsWorld.addRigidBody(rigidBodies.anchor);
+        physicsWorld.addRigidBody(rigidBodies.anchor, GROUP_TORSO, GROUP_TORSO); // Anchor collides with everything
         console.log('✅ Created static anchor body (kinematic, follows cursor)');
     }
 
@@ -640,7 +619,13 @@ function createRigidBodies() {
             return;
         }
 
-        const halfExtents = new AmmoLib.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
+        // Shrink collision shapes significantly to prevent initial overlap
+        const shrink = 0.5; // 50% of original size for torso (more clearance)
+        const halfExtents = new AmmoLib.btVector3(
+            size.x * 0.5 * shrink,
+            size.y * 0.5 * shrink,
+            size.z * 0.5 * shrink
+        );
 
         // Create box shape
         const torsoShape = new AmmoLib.btBoxShape(halfExtents);
@@ -668,11 +653,12 @@ function createRigidBodies() {
             throw new Error("❌ Failed to create torso rigid body!");
         }
 
-        // Set activation state - no kinematic flags
+        // Torso stays dynamic (not kinematic) - only limbs are kinematic for manual control
+        // Set activation state
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
 
         // Add to physics world
-        physicsWorld.addRigidBody(rigidBodies.torso);
+        physicsWorld.addRigidBody(rigidBodies.torso, GROUP_TORSO, GROUP_LIMB); // Torso collides with limbs only
 
         // FAIL FAST: Validate physics authority
         validatePhysicsAuthority();
@@ -690,7 +676,6 @@ function createRigidBodies() {
 
     limbs.forEach(({ name, ref, mass }) => {
         if (!ref) {
-            console.log(`⚠️ Skipping ${name} - reference not found`);
             return;
         }
 
@@ -700,29 +685,26 @@ function createRigidBodies() {
         ref.getWorldPosition(worldPos);
         ref.getWorldQuaternion(worldQuat);
 
-        // Approximate box shape from bounds
-        const bbox = new THREE.Box3().setFromObject(ref);
-        const size = bbox.getSize(new THREE.Vector3());
+        // Use capsule colliders for limbs (wooden rod physics)
+        // Measure limb dimensions manually for realistic wooden toy behavior
+        const radius = 0.08;      // thickness of wooden limb
+        const height = 1.2;       // length excluding caps
 
-        // Debug: Validate size
-        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z) ||
-            size.x <= 0 || size.y <= 0 || size.z <= 0) {
-            console.error('❌ Invalid bounding box size for', name, ':', size.x, size.y, size.z);
-            return;
-        }
+        const shape = new AmmoLib.btCapsuleShape(radius, height);
 
-        const halfExtents = new AmmoLib.btVector3(size.x * 0.5, size.y * 0.5, size.z * 0.5);
-
-        const shape = new AmmoLib.btBoxShape(halfExtents);
+        console.log(`🔧 Created capsule collider for ${name}: radius=${radius}, height=${height}`);
 
         // Calculate local inertia
         const localInertia = new AmmoLib.btVector3(0, 0, 0);
         shape.calculateLocalInertia(mass, localInertia);
 
-        // Create initial transform
+        // Create initial transform with proper capsule orientation
         const initialTransform = new AmmoLib.btTransform();
         initialTransform.setIdentity();
         initialTransform.setOrigin(new AmmoLib.btVector3(worldPos.x, worldPos.y, worldPos.z));
+
+        // Rotate capsule to match limb direction (assuming limbs extend along Y-axis from shoulder/hip)
+        // Capsules are Y-aligned by default, so no additional rotation needed if limbs point up
         initialTransform.setRotation(new AmmoLib.btQuaternion(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w));
 
         // Create motion state with initial transform
@@ -730,12 +712,24 @@ function createRigidBodies() {
         const rbInfo = new AmmoLib.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
 
         rigidBodies[name] = new AmmoLib.btRigidBody(rbInfo);
-        rigidBodies[name].setDamping(0.1, 0.2);
-        rigidBodies[name].setActivationState(4);
+
+        // TEMPORARY: Make kinematic initially to prevent collision during setup
+        rigidBodies[name].setCollisionFlags(
+            rigidBodies[name].getCollisionFlags() | 2 // CF_KINEMATIC_OBJECT
+        );
+
+        // Basic setup
+        rigidBodies[name].setDamping(0.1, 0.2); // Normal damping
+        rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION
         rigidBodies[name].setSleepingThresholds(0, 0);
 
-        physicsWorld.addRigidBody(rigidBodies[name]);
-        console.log(`✅ Created ${name} body (mass: ${mass}) at (${worldPos.x.toFixed(3)}, ${worldPos.y.toFixed(3)}, ${worldPos.z.toFixed(3)})`);
+        // Wood-like physics properties
+        rigidBodies[name].setFriction(0.6);
+        rigidBodies[name].setRollingFriction(0.4);
+        rigidBodies[name].setSpinningFriction(0.4);
+        rigidBodies[name].setRestitution(0.05); // Wood barely bounces
+
+        physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB); // Limbs collide with other limbs only
     });
 
     console.log('📊 Rigid bodies summary:', {
@@ -750,6 +744,15 @@ function createRigidBodies() {
 
 // Create hinge constraint with motor between anchor and torso
 function createConstraints() {
+    console.log('🚀 createConstraints() called');
+
+    // Validate that we have the required bodies
+    if (!rigidBodies.torso) {
+        console.error('❌ No torso body found!');
+        return;
+    }
+
+    console.log('📊 Available rigid bodies:', Object.keys(rigidBodies).filter(key => rigidBodies[key]));
     console.log('🔗 Creating motor-based hinge constraint...');
 
     if (!AmmoLib) {
@@ -777,11 +780,7 @@ function createConstraints() {
         return;
     }
 
-    // STEP 5: ANCHOR ↔ TORSO HINGE
-    // pivotA = (0,0,0) in anchor local space
-    // pivotB = jointWorld − torsoWorldOrigin
-    // axis = Y axis
-
+    // STEP 5: ANCHOR ↔ TORSO HINGE - ENABLED TO KEEP TORSO IN FRAME WITH GRAVITY
     // Compute jointWorld from Blender Empty
     const jointWorld = new THREE.Vector3();
     jointEmptyRef.getWorldPosition(jointWorld);
@@ -798,21 +797,27 @@ function createConstraints() {
         jointWorld.z - torsoOrigin.z()
     );
 
-    // Create hinge constraint between anchor and torso
+    // Create hinge constraint between anchor and torso - allows free Y-axis rotation
     constraints.spinHinge = new AmmoLib.btHingeConstraint(
         rigidBodies.anchor,
         rigidBodies.torso,
         new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin
         pivotB,                             // pivotB: torso local pivot
-        new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis
+        new AmmoLib.btVector3(0, 1, 0),     // axisA: Y-axis (vertical spin)
         new AmmoLib.btVector3(0, 1, 0),     // axisB: Y-axis
         true                                // useReferenceFrameA
     );
 
-    // Add constraint to physics world
-    physicsWorld.addConstraint(constraints.spinHinge, false);
+    // Set wide angle limits to allow free Y-axis rotation
+    constraints.spinHinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.1, 0.1, 1.0);
 
-    console.log('✅ Created anchor ↔ torso hinge constraint');
+    // Enable motor for free spinning (but don't start it yet)
+    constraints.spinHinge.enableAngularMotor(false, 0, 0);
+
+    // Add constraint to physics world (disable collision between connected bodies)
+    physicsWorld.addConstraint(constraints.spinHinge, true);
+
+    console.log('✅ Created anchor ↔ torso hinge constraint (free Y-axis rotation)');
 
     // Create limb constraints using constraint objects as joint positions
     const limbConstraints = [
@@ -822,30 +827,26 @@ function createConstraints() {
         { name: 'rightLeg', ref: rightLegRef, body: rigidBodies.rightLeg, joint: rightLegConstraint }
     ];
 
+    console.log('🔧 Creating limb constraints...');
+
+
     limbConstraints.forEach(({ name, ref, body, joint }) => {
         if (!body || !ref) {
-            console.log(`⚠️ Skipping constraint for ${name} - body or reference missing`);
+            console.log(`❌ Skipping ${name} - body or ref missing`);
             return;
         }
 
-        // Count meshes in limb group (for debugging)
-        let limbMeshCount = 0;
-        ref.traverse((child) => {
-            if (child.isMesh) {
-                limbMeshCount++;
-            }
-        });
-        console.log(`📊 ${name} contains ${limbMeshCount} meshes`);
+        console.log(`🔧 Creating constraint for ${name}...`);
 
         // Get joint position from constraint object (or fallback to limb position)
         const jointWorld = new THREE.Vector3();
         if (joint) {
             joint.getWorldPosition(jointWorld);
-            console.log(`🔗 ${name} using constraint joint: ${joint.name}`);
+            console.log(`🎯 Using constraint joint for ${name}: (${jointWorld.x.toFixed(2)}, ${jointWorld.y.toFixed(2)}, ${jointWorld.z.toFixed(2)})`);
         } else {
             // Fallback: use limb origin as joint
             ref.getWorldPosition(jointWorld);
-            console.log(`⚠️ ${name} using fallback joint (limb origin)`);
+            console.log(`⚠️ Using fallback joint for ${name}: (${jointWorld.x.toFixed(2)}, ${jointWorld.y.toFixed(2)}, ${jointWorld.z.toFixed(2)})`);
         }
 
         // Get torso physics body world position
@@ -873,44 +874,50 @@ function createConstraints() {
             jointWorld.z - limbOrigin.z()
         );
 
-        // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
-        const hinge = new AmmoLib.btHingeConstraint(
-            rigidBodies.torso,
-            body,
-            pivotA,
-            pivotB,
-            new AmmoLib.btVector3(0, 1, 0),  // axisA: Y-axis
-            new AmmoLib.btVector3(0, 1, 0),  // axisB: Y-axis
-            true
-        );
+        console.log(`📍 ${name} joint at: (${jointWorld.x.toFixed(2)}, ${jointWorld.y.toFixed(2)}, ${jointWorld.z.toFixed(2)})`);
 
-        // Add to physics world (disable collisions between connected bodies)
-        physicsWorld.addConstraint(hinge, false);
+        try {
+            // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
+            const hinge = new AmmoLib.btHingeConstraint(
+                rigidBodies.torso,
+                body,
+                pivotA,
+                pivotB,
+                new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis (forward axis)
+                new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
+                true
+            );
 
-        // Store constraint
-        constraints[name] = hinge;
+            // Disable angle limits to allow free rotation (important for centrifugal force!)
+            hinge.setLimit(-Math.PI * 2, Math.PI * 2, 0.1, 0.1, 1.0); // Wide limits - full rotation allowed
 
-        console.log(`✅ Created hinge constraint: ${name}`);
-        console.log(`   Joint: (${jointWorld.x.toFixed(3)}, ${jointWorld.y.toFixed(3)}, ${jointWorld.z.toFixed(3)})`);
-        console.log(`   Torso origin: (${torsoOrigin.x().toFixed(3)}, ${torsoOrigin.y().toFixed(3)}, ${torsoOrigin.z().toFixed(3)})`);
-        console.log(`   Limb origin: (${limbOrigin.x().toFixed(3)}, ${limbOrigin.y().toFixed(3)}, ${limbOrigin.z().toFixed(3)})`);
-        console.log(`   Pivot A (torso local): (${pivotA.x().toFixed(3)}, ${pivotA.y().toFixed(3)}, ${pivotA.z().toFixed(3)})`);
-        console.log(`   Pivot B (limb local): (${pivotB.x().toFixed(3)}, ${pivotB.y().toFixed(3)}, ${pivotB.z().toFixed(3)})`);
+            // Add to physics world (disable collisions between connected bodies)
+            physicsWorld.addConstraint(hinge, true);
+
+            // Store constraint
+            constraints[name] = hinge;
+
+            console.log(`✅ Successfully created and added hinge constraint for ${name}`);
+
+        } catch (error) {
+            console.error(`❌ Failed to create hinge constraint for ${name}:`, error);
+        }
     });
 }
 
 // Mouse interaction variables
 const mouse = new THREE.Vector2();
 
-// Cursor control - anchor follows mouse
-let targetAnchorX = 0;
-let targetAnchorZ = 0;
-let currentAnchorX = 0;
-let currentAnchorZ = 0;
+// Click-to-rotate control
+let currentRotationDirection = 1; // 1 for clockwise, -1 for counterclockwise
 
 // Motor control
 const MOTOR_TARGET_SPEED = 8.0; // Speed when clicking
 const MOTOR_MAX_TORQUE = 15.0;  // Torque limit
+
+// Collision groups for proper limb-torso separation
+const GROUP_TORSO = 1;
+const GROUP_LIMB = 2;
 
 // Zoom constants
 const ZOOM_SPEED = 0.1; // How fast to zoom
@@ -921,7 +928,6 @@ let currentZoomDistance = 12; // Current distance from camera to target (matches
 // Animation timing
 let lastTime = 0;
 let frameCount = 0;
-let syncCount = 0;
 
 // Physics ↔ Three.js sync
 let physicsMeshMap = new Map();
@@ -929,49 +935,50 @@ let physicsMeshMap = new Map();
 // Toy references are initialized when GLTF loads
 console.log('Motor-based Ammo.js jumping jack initialized');
 
-// Mouse event handlers
+// Mouse control state
+let mouseButtonDown = false;
+let lastMouseX = 0;
+let currentMouseDelta = 0;
+
 function onMouseMove(event) {
     // Convert mouse position to normalized device coordinates (-1 to +1)
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    // STEP 7: CURSOR CONTROL - Update anchor position targets
-    // Convert screen position to world offset
-    targetAnchorX = mouse.x * 2.0; // Scale for reasonable movement range
-    targetAnchorZ = mouse.y * 2.0;
+    // Track mouse delta for rotation control (only when button is down)
+    if (mouseButtonDown) {
+        const deltaX = event.clientX - lastMouseX;
+        currentMouseDelta = deltaX * 0.005; // Scale down for reasonable rotation speed
+        lastMouseX = event.clientX;
+
+        // Debug: Log mouse movement
+        if (Math.abs(deltaX) > 0.1) {
+            console.log(`🐭 Mouse move: deltaX=${deltaX.toFixed(1)}, currentDelta=${currentMouseDelta.toFixed(3)}`);
+        }
+    }
+
+    // Debug: Log mouse delta when button is down
+    if (mouseButtonDown && Math.abs(currentMouseDelta) > 0.001) {
+        if (frameCount % 30 === 0) { // Throttle logging
+            console.log(`🐭 Mouse delta: ${currentMouseDelta.toFixed(3)}`);
+        }
+    }
 }
 
 function onMouseDown(event) {
-    // STEP 8: CLICK CONTROL - DISABLED for debugging pendulum physics
-    // try {
-    //     if (!constraints.spinHinge) {
-    //         console.warn('⚠️ Motor not ready yet - constraints not created');
-    //         return;
-    //     }
-
-    //     const direction = Math.random() > 0.5 ? 1 : -1; // Random spin direction
-    //     const targetSpeed = direction * MOTOR_TARGET_SPEED;
-
-    //     constraints.spinHinge.enableAngularMotor(true, targetSpeed, MOTOR_MAX_TORQUE);
-    //     console.log(`🔄 Motor activated: target speed ${targetSpeed}, max torque ${MOTOR_MAX_TORQUE}`);
-    // } catch (error) {
-    //     console.error('❌ Motor control error:', error);
-    // }
+    mouseButtonDown = true;
+    lastMouseX = event.clientX;
+    // Randomly choose rotation direction when button is first pressed
+    currentRotationDirection = Math.random() > 0.5 ? 1 : -1;
+    console.log(`🖱️ Mouse button down - rotation enabled (${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'}) at X:`, event.clientX);
 }
 
 function onMouseUp(event) {
-    // Stop motor when mouse released - DISABLED for debugging
-    // try {
-    //     if (!constraints.spinHinge) {
-    //         return; // Motor not ready yet
-    //     }
-
-    //     constraints.spinHinge.enableAngularMotor(true, 0, MOTOR_MAX_TORQUE);
-    //     console.log('⏹️ Motor stopped');
-    // } catch (error) {
-    //     console.error('❌ Motor stop error:', error);
-    // }
+    mouseButtonDown = false;
+    mouseMoving = false;
+    console.log('🖱️ Mouse button up - rotation disabled');
 }
+
 
 function onMouseWheel(event) {
     event.preventDefault();
@@ -1006,56 +1013,93 @@ function animate(currentTime = 0) {
         const delta = Math.min((currentTime - lastTime) / 1000, 1/60); // Cap at 60 FPS for physics
         lastTime = currentTime;
 
-        // Debug: Log large delta values that might cause instability
-        if (delta > 0.1) {
-            console.warn('⚠️ Large delta time:', delta, 'capping to prevent physics instability');
+        // Simple frame counter to verify animation is running
+        frameCount++;
+        if (frameCount % 60 === 0) { // Every ~1 second at 60fps
+            // console.log(`🎬 Animation running - frame ${frameCount}`);
         }
 
-        // MANUAL HINGE CONTROL - Direct arm rotation in torso's local XY plane
-        if (bodyMainRef) {
-            // Smooth interpolation to target position
-            currentAnchorX += (targetAnchorX - currentAnchorX) * delta * 2;
-            currentAnchorZ += (targetAnchorZ - currentAnchorZ) * delta * 2;
-
-            // Convert mouse position to hinge angles (in radians)
-            const maxArmAngle = Math.PI / 2; // 90 degrees max arm swing
-            const maxLegAngle = Math.PI / 4; // 45 degrees max leg swing
-
-            // Arms swing in torso's local XY plane (around X-axis for up-down swing)
-            const leftArmAngle = currentAnchorX * maxArmAngle;   // X mouse controls left arm
-            const rightArmAngle = currentAnchorX * maxArmAngle;  // X mouse controls right arm (same direction for jumping jack)
-            const armVerticalAngle = currentAnchorZ * maxArmAngle; // Y mouse controls vertical swing
-
-            // Legs swing in world space for now
-            const legSwingAngle = currentAnchorZ * maxLegAngle;
-
-            // Apply hinge rotation to pivot objects (limbs swing around Z-axis/blue axis)
-            if (leftArmPivot) {
-                leftArmPivot.rotation.x = 0; // Reset other axes
-                leftArmPivot.rotation.y = 0;
-                leftArmPivot.rotation.z = leftArmAngle; // Z-axis hinge
-            }
-            if (rightArmPivot) {
-                rightArmPivot.rotation.x = 0; // Reset other axes
-                rightArmPivot.rotation.y = 0;
-                rightArmPivot.rotation.z = rightArmAngle; // Z-axis hinge
+        // PHYSICS CONTROL - Click-to-rotate control
+        if (AmmoLib && physicsWorld) {
+            // DEBUG: Check constraint count occasionally
+            if (frameCount % 120 === 0) {
+                console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
             }
 
-            // Apply hinge rotation to legs (around Z-axis/blue axis)
-            if (leftLegRef) {
-                leftLegRef.rotation.x = 0;
-                leftLegRef.rotation.y = 0;
-                leftLegRef.rotation.z = legSwingAngle; // Z-axis hinge
+            // Apply Y-axis rotation torque when mouse is clicked and dragged
+            if (rigidBodies.torso) {
+                // Apply sustained angular velocity for centrifugal force when mouse is clicked
+                if (rigidBodies.torso) {
+                    // Set damping to physically sane values (no conditionals)
+                    rigidBodies.torso.setDamping(0.02, 0.02);
+
+                    // Apply sustained angular velocity when mouse is down
+                    if (mouseButtonDown) {
+                        const angularVelocityY = 10.0 * currentRotationDirection; // Direct velocity, not torque
+
+                        // Set angular velocity directly (persistent spin)
+                        rigidBodies.torso.setAngularVelocity(
+                            new AmmoLib.btVector3(0, angularVelocityY, 0)
+                        );
+
+                        // DEBUG: Log occasionally
+                        if (frameCount % 60 === 0) {
+                            console.log(`🔄 SET ANGULAR VELOCITY: ${angularVelocityY} (direction: ${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'})`);
+                        }
+                    }
+
+                    // DEBUG: Check angular velocity periodically
+                    if (frameCount % 60 === 0) {
+                        const angVel = rigidBodies.torso.getAngularVelocity();
+                        console.log(`🔄 AngVel: (${angVel.x().toFixed(3)}, ${angVel.y().toFixed(3)}, ${angVel.z().toFixed(3)})`);
+                    }
+
+        // Keep limbs lightly damped and active for centrifugal response
+                ['leftArm', 'rightArm', 'leftLeg', 'rightLeg'].forEach(name => {
+                    if (rigidBodies[name]) {
+                        rigidBodies[name].setDamping(0.01, 0.02); // Very light damping
+                        rigidBodies[name].activate(true); // Keep limbs active
+                        rigidBodies[name].setSleepingThresholds(0, 0);
+
+                        // DEBUG: Log limb positions during spin
+                        if (mouseButtonDown && frameCount % 60 === 0) {
+                            const pos = rigidBodies[name].getWorldTransform().getOrigin();
+                            console.log(`${name}: pos(${pos.x().toFixed(2)}, ${pos.y().toFixed(2)}, ${pos.z().toFixed(2)})`);
+                        }
+                    }
+                });
+                }
             }
-            if (rightLegRef) {
-                rightLegRef.rotation.x = 0;
-                rightLegRef.rotation.y = 0;
-                rightLegRef.rotation.z = -legSwingAngle; // Opposite direction, Z-axis hinge
+
+            // Step real physics simulation
+            try {
+                physicsWorld.stepSimulation(delta, 10);
+
+                // DEBUG: Check if constraints are being processed
+                if (frameCount % 120 === 0) {
+                    try {
+                        const numConstraints = physicsWorld.getNumConstraints();
+                        console.log(`🔗 Physics world has ${numConstraints} constraints`);
+                    } catch (e) {
+                        console.log('🔗 Could not get constraint count');
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Physics step failed:', e);
+                return;
+            }
+
+            // Sync physics transforms to Three.js visuals
+            syncPhysicsToThree();
+
+            // Periodic check if sync is working
+            if (frameCount % 120 === 0) { // Every 2 seconds
+                console.log(`🔄 Physics sync active - frame ${frameCount}`);
             }
         }
 
-        // COMMENTED OUT PHYSICS SYNC
-        // syncPhysicsToThree();
+        // PHYSICS → VISUAL SYNC (MANDATORY)
+        // syncPhysicsToThree() is called above in the physics control section
 
         renderer.render(scene, camera);
     } catch (error) {
@@ -1067,8 +1111,8 @@ function animate(currentTime = 0) {
     }
 }
 
-// COMMENTED OUT PHYSICS SYNC - USING MANUAL CONTROL
-/*
+
+// PHYSICS → VISUAL SYNC (MANDATORY)
 function syncPhysicsToThree() {
     // Guard: Only sync if AmmoLib is loaded and physics bodies exist
     if (!AmmoLib || !rigidBodies.torso) {
@@ -1104,15 +1148,14 @@ function syncPhysicsToThree() {
                     return;
                 }
 
-                // Debug: Log first few successful syncs
-                if (syncCount < 3) {
-                    syncCount++;
-                    console.log(`🔄 Torso sync ${syncCount}: pos (${p.x().toFixed(3)}, ${p.y().toFixed(3)}, ${p.z().toFixed(3)})`);
-                }
-
                 // Sync to the group - groups handle hierarchical transforms correctly
                 bodyMainRef.position.set(p.x(), p.y(), p.z());
                 bodyMainRef.quaternion.set(q.x(), q.y(), q.z(), q.w());
+
+                // DEBUG: Log torso rotation occasionally
+                if (frameCount % 60 === 0) { // Every second
+                    // console.log(`🔄 Torso visual: pos(${p.x().toFixed(2)}, ${p.y().toFixed(2)}, ${p.z().toFixed(2)}) rot(${q.x().toFixed(3)}, ${q.y().toFixed(3)}, ${q.z().toFixed(3)}, ${q.w().toFixed(3)})`);
+                }
             } catch (e) {
                 console.error('❌ Error getting torso transform:', e);
                 return;
@@ -1147,7 +1190,12 @@ function syncPhysicsToThree() {
                     }
 
                     ref.position.set(p.x(), p.y(), p.z());
-                    ref.quaternion.set(q.x(), p.y(), q.z(), q.w());
+                    ref.quaternion.set(q.x(), q.y(), q.z(), q.w());
+
+                    // DEBUG: Log limb movement when spinning (less frequently)
+                    // if (mouseButtonDown && frameCount % 120 === 0) {
+                    //     console.log(`${name}: pos(${p.x().toFixed(2)}, ${p.y().toFixed(2)}, ${p.z().toFixed(2)})`);
+                    // }
                 } catch (e) {
                     console.error(`❌ Error getting ${name} transform:`, e);
                 }
@@ -1158,7 +1206,6 @@ function syncPhysicsToThree() {
     // Anchor is kinematic and doesn't need syncing back to Three.js
     // (it only moves based on cursor input)
 }
-*/
 
 // Handle window resize
 function onWindowResize() {
