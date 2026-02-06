@@ -9,7 +9,7 @@ const camera = new THREE.PerspectiveCamera(
     0.1,
     1000
 );
-camera.position.set(0, 8, 12);
+camera.position.set(0, 8, 18);
 camera.lookAt(0, 0, 0);
 
 // Renderer setup - optimized for bright, vibrant toy display
@@ -815,31 +815,23 @@ function createConstraints() {
     const jointWorld = new THREE.Vector3();
     jointEmptyRef.getWorldPosition(jointWorld);
 
-    // Get torso physics body world transform
-    const torsoTransform = new AmmoLib.btTransform();
-    rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
-    const torsoOrigin = torsoTransform.getOrigin();
-
     // Use world Y-axis (0,1,0) - GLB export should align torso correctly
     const trueYAxis = new AmmoLib.btVector3(0, 1, 0);
 
-    // Compute pivotB = jointWorld − torsoWorldOrigin
-    const pivotB = new AmmoLib.btVector3(
-        jointWorld.x - torsoOrigin.x(),
-        jointWorld.y - torsoOrigin.y(),
-        jointWorld.z - torsoOrigin.z()
-    );
+    // For clean center rotation, use (0,0,0) as pivot in torso local space
+    // This makes the torso rotate around its center of mass
+    const pivotB = new AmmoLib.btVector3(0, 0, 0);
 
-    console.log(`🔄 Hinge axis derived from torso transform: Y=(${trueYAxis.x().toFixed(3)}, ${trueYAxis.y().toFixed(3)}, ${trueYAxis.z().toFixed(3)})`);
+    console.log(`🔄 Using center pivot for stable rotation around torso center of mass`);
 
-    // Create hinge constraint between anchor and torso - uses true Y-axis from transform
+    // Create hinge constraint between anchor and torso - rotates around center
     constraints.spinHinge = new AmmoLib.btHingeConstraint(
         rigidBodies.anchor,
         rigidBodies.torso,
         new AmmoLib.btVector3(0, 0, 0),     // pivotA: anchor origin
-        pivotB,                             // pivotB: torso local pivot
-        trueYAxis,                          // axisA: true Y-axis from torso transform
-        trueYAxis,                          // axisB: true Y-axis from torso transform
+        pivotB,                             // pivotB: (0,0,0) - torso center
+        trueYAxis,                          // axisA: Y-axis for rotation
+        trueYAxis,                          // axisB: Y-axis for rotation
         true                                // useReferenceFrameA
     );
 
@@ -979,7 +971,7 @@ function hideLoading() {
 const ZOOM_SPEED = 0.1; // How fast to zoom
 const MIN_ZOOM_DISTANCE = 5; // Closest zoom distance
 const MAX_ZOOM_DISTANCE = 25; // Farthest zoom distance
-let currentZoomDistance = 12; // Current distance from camera to target (matches initial position)
+let currentZoomDistance = 18; // Current distance from camera to target (matches initial position)
 
 // Animation timing
 let lastTime = 0;
@@ -1024,8 +1016,8 @@ function onMouseMove(event) {
 function onMouseDown(event) {
     mouseButtonDown = true;
     lastMouseX = event.clientX;
-    // Randomly choose rotation direction when button is first pressed
-    currentRotationDirection = Math.random() > 0.5 ? 1 : -1;
+    // Alternate rotation direction with each click
+    currentRotationDirection *= -1; // Toggle between 1 and -1
     console.log(`🖱️ Mouse button down - rotation enabled (${currentRotationDirection > 0 ? 'clockwise' : 'counterclockwise'}) at X:`, event.clientX);
 }
 
