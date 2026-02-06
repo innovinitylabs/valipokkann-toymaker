@@ -1078,9 +1078,9 @@ function animate(currentTime = 0) {
         // PHYSICS CONTROL - Click-to-rotate control
         if (AmmoLib && physicsWorld) {
             // DEBUG: Check constraint count occasionally
-            if (frameCount % 120 === 0) {
-                console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
-            }
+            // if (frameCount % 120 === 0) {
+            //     console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
+            // }
 
             // Apply direct torque to torso for rotation
             if (mouseButtonDown) {
@@ -1109,9 +1109,9 @@ function animate(currentTime = 0) {
                 physicsWorld.stepSimulation(delta, 10);
 
                 // DEBUG: Check if constraints are being processed
-                if (frameCount % 120 === 0) {
-                    console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
-                }
+                // if (frameCount % 120 === 0) {
+                //     console.log(`🔗 Active constraints: ${Object.keys(constraints).length}`);
+                // }
             } catch (e) {
                 console.error('❌ Physics step failed:', e);
                 return;
