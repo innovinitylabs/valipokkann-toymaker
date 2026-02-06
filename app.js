@@ -1486,6 +1486,12 @@ function animate(currentTime = 0) {
 
             // Step real physics simulation
             try {
+                // Safety check: validate physics world before stepping
+                if (!physicsWorld || !physicsWorld.stepSimulation) {
+                    console.error('❌ Physics world corrupted - cannot step simulation');
+                    return;
+                }
+
                 physicsWorld.stepSimulation(delta, 20); // Increased from 10 for better constraint stability
 
                 // DEBUG: Check if constraints are being processed
@@ -1494,6 +1500,7 @@ function animate(currentTime = 0) {
                 // }
             } catch (e) {
                 console.error('❌ Physics step failed:', e);
+                console.error('This may indicate physics engine corruption. Try resetting the toy.');
                 return;
             }
 
@@ -1522,10 +1529,11 @@ function animate(currentTime = 0) {
 
 // PHYSICS → VISUAL SYNC (MANDATORY)
 function syncPhysicsToThree() {
-    // Guard: Only sync if AmmoLib is loaded and physics bodies exist
-    if (!AmmoLib || !rigidBodies.torso) {
-        return;
-    }
+    try {
+        // Guard: Only sync if AmmoLib is loaded and physics bodies exist
+        if (!AmmoLib || !rigidBodies.torso) {
+            return;
+        }
 
     // 🔒 Safety guard: never sync world physics into parented meshes
     if (
@@ -1538,13 +1546,31 @@ function syncPhysicsToThree() {
         return;
     }
 
-    const tmpTrans = new AmmoLib.btTransform();
+    // Additional safety: Check if physics world is still valid
+    if (!physicsWorld) {
+        console.warn('⚠️ Physics world not available - skipping sync');
+        return;
+    }
+
+    let tmpTrans;
+    try {
+        tmpTrans = new AmmoLib.btTransform();
+    } catch (e) {
+        console.error('❌ Failed to create btTransform - physics engine corrupted:', e);
+        return;
+    }
 
     // Sync torso from physics to Three.js
     if (rigidBodies.torso && bodyMainRef) {
-        const motionState = rigidBodies.torso.getMotionState();
-        if (motionState) {
-            try {
+        try {
+            // Additional validation: check if body is still valid
+            if (!rigidBodies.torso.getMotionState) {
+                console.warn('⚠️ Torso motion state accessor missing');
+                return;
+            }
+
+            const motionState = rigidBodies.torso.getMotionState();
+            if (motionState && motionState.getWorldTransform) {
                 motionState.getWorldTransform(tmpTrans);
 
                 const p = tmpTrans.getOrigin();
@@ -1564,12 +1590,12 @@ function syncPhysicsToThree() {
                 if (frameCount % 60 === 0) { // Every second
                     // console.log(`🔄 Torso visual: pos(${p.x().toFixed(2)}, ${p.y().toFixed(2)}, ${p.z().toFixed(3)}, ${p.w().toFixed(3)}) rot(${q.x().toFixed(3)}, ${q.y().toFixed(3)}, ${q.z().toFixed(3)}, ${q.w().toFixed(3)})`);
                 }
-            } catch (e) {
-                console.error('❌ Error getting torso transform:', e);
-                return;
+            } else {
+                console.warn('⚠️ Torso motion state is null or invalid');
             }
-        } else {
-            console.warn('⚠️ Torso motion state is null');
+        } catch (e) {
+            console.error('❌ Error syncing torso transform:', e);
+            return;
         }
     }
 
@@ -1642,9 +1668,15 @@ function syncPhysicsToThree() {
 
     limbs.forEach(({ name, ref, body }) => {
         if (body && ref) {
-            const motionState = body.getMotionState();
-            if (motionState) {
-                try {
+            try {
+                // Additional validation: check if body is still valid
+                if (!body.getMotionState) {
+                    console.warn(`⚠️ ${name} motion state accessor missing`);
+                    return;
+                }
+
+                const motionState = body.getMotionState();
+                if (motionState && motionState.getWorldTransform) {
                     motionState.getWorldTransform(tmpTrans);
 
                     const p = tmpTrans.getOrigin();
@@ -1663,15 +1695,22 @@ function syncPhysicsToThree() {
                     // if (mouseButtonDown && frameCount % 120 === 0) {
                     //     console.log(`${name}: pos(${p.x().toFixed(2)}, ${p.y().toFixed(2)}, ${p.z().toFixed(2)})`);
                     // }
-                } catch (e) {
-                    console.error(`❌ Error getting ${name} transform:`, e);
+                } else {
+                    console.warn(`⚠️ ${name} motion state is null or invalid`);
                 }
+            } catch (e) {
+                console.error(`❌ Error getting ${name} transform:`, e);
             }
         }
     });
 
     // Anchor is kinematic and doesn't need syncing back to Three.js
     // (it only moves based on cursor input)
+    } catch (error) {
+        console.error('❌ Physics sync error - skipping frame:', error.message);
+        // Continue without crashing - physics corruption shouldn't break the app
+        return;
+    }
 }
 
 // Handle window resize
