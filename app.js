@@ -1200,32 +1200,28 @@ function createConstraints() {
         // console.log(`📍 ${name} joint at: (${jointWorld.x.toFixed(2)}, ${jointWorld.y.toFixed(2)}, ${jointWorld.z.toFixed(2)})`);
 
         try {
-            // Create 6DOF constraint to allow rotation around Z but lock translation in all axes
-            const constraintFrame = new AmmoLib.btTransform();
-            constraintFrame.setIdentity();
-            constraintFrame.setOrigin(pivotA); // Use pivotA as the constraint frame origin
+            // Create btHingeConstraint(torso, limb, pivotA, pivotB, axis, axis, true)
+            // For jumping jack limbs: use Z-axis rotation to constrain movement to X-Y plane
+            // This prevents limbs from moving in local Z direction (depth)
+        const hinge = new AmmoLib.btHingeConstraint(
+            rigidBodies.torso,
+            body,
+            pivotA,
+            pivotB,
+                new AmmoLib.btVector3(0, 0, 1),  // axisA: Z-axis - limbs rotate in X-Y plane only
+            new AmmoLib.btVector3(0, 0, 1),  // axisB: Z-axis
+            true
+        );
 
-            const sixdof = new AmmoLib.btGeneric6DofConstraint(
-                rigidBodies.torso,
-                body,
-                constraintFrame,
-                constraintFrame, // Use same frame for both bodies
-                true // useReferenceFrameA
-            );
+            // Set reasonable angle limits to prevent limbs from going through body
+            // Allow swinging motion but prevent extreme positions
+            hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.1, 0.1, 0.9); // ~135 degrees each direction
 
-            // Lock all translational movement (X, Y, Z axes)
-            sixdof.setLinearLowerLimit(new AmmoLib.btVector3(0, 0, 0));
-            sixdof.setLinearUpperLimit(new AmmoLib.btVector3(0, 0, 0));
-
-            // Allow full rotation around Z axis, lock X and Y rotation
-            sixdof.setAngularLowerLimit(new AmmoLib.btVector3(0, 0, -Math.PI * 2));
-            sixdof.setAngularUpperLimit(new AmmoLib.btVector3(0, 0, Math.PI * 2));
-
-            // Add to physics world (disable collisions between connected bodies)
-            physicsWorld.addConstraint(sixdof, true);
+        // Add to physics world (disable collisions between connected bodies)
+            physicsWorld.addConstraint(hinge, true);
 
         // Store constraint
-            constraints[name] = sixdof;
+        constraints[name] = hinge;
 
             // console.log(`✅ Successfully created and added hinge constraint for ${name}`);
 
