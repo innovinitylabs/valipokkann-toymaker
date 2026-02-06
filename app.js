@@ -909,9 +909,11 @@ let physicsMeshMap = new Map();
 // Toy references are initialized when GLTF loads
 console.log('Motor-based Ammo.js jumping jack initialized');
 
-// Mouse movement tracking
+// Mouse control state
 let mouseMoving = false;
 let lastMouseMoveTime = 0;
+let mouseButtonDown = false;
+let lastMouseX = 0;
 const MOUSE_STOP_TIMEOUT = 100; // ms after mouse stops moving
 
 function onMouseMove(event) {
@@ -919,14 +921,17 @@ function onMouseMove(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    // Track mouse movement
-    mouseMoving = true;
-    lastMouseMoveTime = performance.now();
+    // Track mouse movement for rotation control (only when button is down)
+    if (mouseButtonDown) {
+        const deltaX = event.clientX - lastMouseX;
+        lastMouseX = event.clientX;
 
-    // STEP 7: CURSOR CONTROL - Update anchor position targets
-    // Convert screen position to world offset
-    targetAnchorX = mouse.x * 2.0; // Scale for reasonable movement range
-    targetAnchorZ = mouse.y * 2.0;
+        // Update rotation target based on horizontal mouse movement
+        targetAnchorX = Math.max(-2, Math.min(2, targetAnchorX + deltaX * 0.01));
+
+        mouseMoving = true;
+        lastMouseMoveTime = performance.now();
+    }
 
     // Debug: Log mouse input occasionally
     if (Math.abs(mouse.x) > 0.1 || Math.abs(mouse.y) > 0.1) {
@@ -934,6 +939,18 @@ function onMouseMove(event) {
             console.log(`🐭 Mouse: screen(${event.clientX}, ${event.clientY}) normalized(${mouse.x.toFixed(2)}, ${mouse.y.toFixed(2)})`);
         }
     }
+}
+
+function onMouseDown(event) {
+    mouseButtonDown = true;
+    lastMouseX = event.clientX;
+    console.log('🖱️ Mouse button down - rotation enabled');
+}
+
+function onMouseUp(event) {
+    mouseButtonDown = false;
+    mouseMoving = false;
+    console.log('🖱️ Mouse button up - rotation disabled');
 }
 
 function onMouseDown(event) {
