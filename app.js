@@ -776,26 +776,7 @@ function createRigidBodies() {
                 // Ignore errors, vertexCount remains 0
             }
 
-            // Special handling for different mesh types
-            if (name.includes('stick')) {
-                // For sticks, use capsule for better physics on thin objects
-                const height = Math.max(size.x, size.y, size.z);
-                const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
-
-                shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
-                // console.log(`    📏 Using capsule for stick: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
-
-            } else if (size.x / Math.max(size.y, size.z) > 3 ||
-                       size.y / Math.max(size.x, size.z) > 3 ||
-                       size.z / Math.max(size.x, size.y) > 3) {
-                // Elongated shape (like sticks) - use capsule
-                const height = Math.max(size.x, size.y, size.z);
-                const radius = Math.min(size.x, size.y, size.z) * 0.5 + 0.02;
-
-                shape = new AmmoLib.btCapsuleShape(radius, Math.max(0.1, height - 2 * radius));
-                // console.log(`    📏 Using capsule for elongated mesh: radius=${radius.toFixed(3)}, height=${(height - 2 * radius).toFixed(3)}`);
-
-            // Use reliable box shapes for torso meshes - avoid convex hull issues entirely
+            // Use reliable box shapes for all torso meshes - avoid convex hull issues entirely
             const padding = 0.01;
             const halfExtents = new AmmoLib.btVector3(
                 (size.x * 0.5) + padding,
@@ -805,8 +786,6 @@ function createRigidBodies() {
 
             shape = new AmmoLib.btBoxShape(halfExtents);
             console.log(`    📦 Using box collider: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
-
-            // Skip all the problematic convex hull code
 
             // Static body (mass = 0) - kinematic collision-only
             const localInertia = new AmmoLib.btVector3(0, 0, 0);
