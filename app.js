@@ -820,9 +820,8 @@ function createConstraints() {
     rigidBodies.torso.getMotionState().getWorldTransform(torsoTransform);
     const torsoOrigin = torsoTransform.getOrigin();
 
-    // Extract the basis matrix to get the true Y-axis after GLB export (Blender Z→Y)
-    const basis = torsoTransform.getBasis();
-    const trueYAxis = basis.getColumn(1); // Column 1 is the Y-axis in world space
+    // Use world Y-axis (0,1,0) - GLB export should align torso correctly
+    const trueYAxis = new AmmoLib.btVector3(0, 1, 0);
 
     // Compute pivotB = jointWorld − torsoWorldOrigin
     const pivotB = new AmmoLib.btVector3(
