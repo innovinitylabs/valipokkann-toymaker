@@ -729,11 +729,13 @@ function createRigidBodies() {
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
         rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
-        // Wood-like physics properties
-        rigidBodies[name].setFriction(0.6);
-        rigidBodies[name].setRollingFriction(0.4);
-        rigidBodies[name].setSpinningFriction(0.4);
-        rigidBodies[name].setRestitution(0.05); // Wood barely bounces
+        // Basic friction properties (conservative - only known working methods)
+        try {
+            rigidBodies[name].setFriction(0.6);
+            rigidBodies[name].setRestitution(0.05); // Wood barely bounces
+        } catch (e) {
+            console.warn(`Could not set physics properties for ${name}:`, e.message);
+        }
 
         physicsWorld.addRigidBody(rigidBodies[name], GROUP_LIMB, GROUP_LIMB); // Limbs collide with other limbs only
     });
