@@ -694,7 +694,11 @@ function createRigidBodies() {
         // Torso stays dynamic (not kinematic) - only limbs are kinematic for manual control
         // Set activation state and damping once at creation
         rigidBodies.torso.setActivationState(4); // DISABLE_DEACTIVATION
-        rigidBodies.torso.setDamping(0.02, 0.02); // Physically sane damping for hinge motor control
+        if (window.physicsMode === 'elastic') {
+            rigidBodies.torso.setDamping(0.01, 0.01); // Lighter damping for elastic behavior
+        } else {
+            rigidBodies.torso.setDamping(0.02, 0.02); // Balanced damping for hinge stability
+        }
 
         // Store initial state for reset functionality
         initialStates.torso = {
@@ -974,7 +978,11 @@ function createRigidBodies() {
         };
 
         // Dynamic body setup - limbs must be dynamic from creation
-        rigidBodies[name].setDamping(0.005, 0.01); // Extremely light damping for centrifugal response
+        if (window.physicsMode === 'elastic') {
+            rigidBodies[name].setDamping(0.002, 0.005); // Very light damping for elastic drift
+        } else {
+            rigidBodies[name].setDamping(0.005, 0.01); // Balanced damping for hinge stability
+        }
         rigidBodies[name].setActivationState(4); // DISABLE_DEACTIVATION - limbs stay active
         rigidBodies[name].setSleepingThresholds(0, 0); // Never sleep
 
@@ -1164,9 +1172,14 @@ function createConstraints() {
             true
         );
 
-            // Set reasonable angle limits to prevent limbs from going through body
-            // Allow swinging motion but prevent extreme positions
-            hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.05, 0.05, 0.8); // ~135 degrees, softer constraints
+            // Set angle limits based on physics mode
+            if (window.physicsMode === 'elastic') {
+                // Elastic mode: more flexible, drifty behavior
+                hinge.setLimit(-Math.PI * 0.9, Math.PI * 0.9, 0.02, 0.02, 0.6); // ~162 degrees, very soft
+            } else {
+                // Hinge mode: constrained, stable behavior (default)
+                hinge.setLimit(-Math.PI * 0.75, Math.PI * 0.75, 0.05, 0.05, 0.8); // ~135 degrees, balanced
+            }
 
         // Add to physics world (disable collisions between connected bodies)
             physicsWorld.addConstraint(hinge, true);
@@ -1466,8 +1479,9 @@ function animate(currentTime = 0) {
                         // Limit angular velocity during spinning to prevent excessive speed
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 8.0) { // Reduced max speed for better constraint stability
-                            const scale = 8.0 / speed;
+                        const maxSpeed = window.physicsMode === 'elastic' ? 10.0 : 8.0;
+                        if (speed > maxSpeed) { // Mode-dependent max speed
+                            const scale = maxSpeed / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
@@ -1518,8 +1532,9 @@ function animate(currentTime = 0) {
                         // Also limit angular velocity to prevent excessive spin
                         const angVel = rigidBodies.torso.getAngularVelocity();
                         const speed = Math.sqrt(angVel.x() * angVel.x() + angVel.y() * angVel.y() + angVel.z() * angVel.z());
-                        if (speed > 10.0) { // Limit max rotation speed (reduced for stability)
-                            const scale = 10.0 / speed;
+                        const maxDecelSpeed = window.physicsMode === 'elastic' ? 12.0 : 10.0;
+                        if (speed > maxDecelSpeed) { // Mode-dependent max deceleration speed
+                            const scale = maxDecelSpeed / speed;
                             rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
