@@ -112,18 +112,87 @@ let constraints = {};
 // Ammo.js object pool to prevent WebAssembly memory corruption
 let ammoObjectPool = {
     transforms: [],
+    vectors: [],
+    quaternions: [],
+    constructionInfos: [],
+
+    // Memory usage tracking
+    allocationCount: 0,
+    maxPoolSize: 50, // Prevent excessive memory usage
 
     getTransform: function() {
         if (this.transforms.length > 0) {
             return this.transforms.pop();
         }
+        this.allocationCount++;
         return new AmmoLib.btTransform();
     },
 
     returnTransform: function(transform) {
-        if (transform && this.transforms.length < 5) { // Limit pool size
+        if (transform && this.transforms.length < this.maxPoolSize) {
             this.transforms.push(transform);
         }
+    },
+
+    getVector: function(x = 0, y = 0, z = 0) {
+        let vec;
+        if (this.vectors.length > 0) {
+            vec = this.vectors.pop();
+            vec.setValue(x, y, z);
+        } else {
+            this.allocationCount++;
+            vec = new AmmoLib.btVector3(x, y, z);
+        }
+        return vec;
+    },
+
+    returnVector: function(vector) {
+        if (vector && this.vectors.length < this.maxPoolSize) {
+            this.vectors.push(vector);
+        }
+    },
+
+    getQuaternion: function(x = 0, y = 0, z = 0, w = 1) {
+        let quat;
+        if (this.quaternions.length > 0) {
+            quat = this.quaternions.pop();
+            quat.setValue(x, y, z, w);
+        } else {
+            this.allocationCount++;
+            quat = new AmmoLib.btQuaternion(x, y, z, w);
+        }
+        return quat;
+    },
+
+    returnQuaternion: function(quaternion) {
+        if (quaternion && this.quaternions.length < this.maxPoolSize) {
+            this.quaternions.push(quaternion);
+        }
+    },
+
+    getConstructionInfo: function(mass, motionState, shape, localInertia) {
+        // ConstructionInfo objects are more complex, create fresh each time
+        // but track the allocation
+        this.allocationCount++;
+        return new AmmoLib.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+    },
+
+    clear: function() {
+        // Clear all pools to free memory
+        this.transforms = [];
+        this.vectors = [];
+        this.quaternions = [];
+        this.constructionInfos = [];
+        this.allocationCount = 0;
+    },
+
+    getStats: function() {
+        return {
+            transforms: this.transforms.length,
+            vectors: this.vectors.length,
+            quaternions: this.quaternions.length,
+            totalAllocations: this.allocationCount
+        };
     }
 };
 
@@ -218,17 +287,17 @@ function updateSolverSettings() {
     const solverInfo = physicsWorld.getSolverInfo();
 
     if (window.physicsMode === 'elastic') {
-        // Elastic mode: fewer iterations for more dynamic, less constrained physics
-        solverInfo.m_numIterations = 12; // Reduced from 20
-        solverInfo.m_erp = 0.6; // More flexible error correction
-        solverInfo.m_erp2 = 0.6; // More flexible constraint handling
-        solverInfo.m_globalCfm = 0.1; // Some constraint force mixing for elasticity
+        // Elastic mode: flexible but stable
+        solverInfo.m_numIterations = 15; // Good balance for elastic behavior
+        solverInfo.m_erp = 0.7; // Good error correction for flexibility
+        solverInfo.m_erp2 = 0.7; // Good constraint handling
+        solverInfo.m_globalCfm = 0.02; // Light constraint force mixing for elasticity
     } else {
-        // Hinge mode: maximum iterations for rock-solid constraint stability
-        solverInfo.m_numIterations = 30; // Increased for maximum stability
-        solverInfo.m_erp = 0.9; // Ultra-precise error correction
-        solverInfo.m_erp2 = 0.9; // Maximum constraint handling
-        solverInfo.m_globalCfm = 0.0; // No constraint force mixing
+        // Hinge mode: maximum stability for precise control
+        solverInfo.m_numIterations = 25; // High iterations for rock-solid stability
+        solverInfo.m_erp = 0.8; // Strong error correction
+        solverInfo.m_erp2 = 0.8; // Strong constraint handling
+        solverInfo.m_globalCfm = 0.0; // No constraint force mixing for precision
     }
 
     // console.log(`🔧 Updated solver for ${window.physicsMode} mode: iterations=${solverInfo.m_numIterations}, erp=${solverInfo.m_erp}`);
@@ -1209,8 +1278,10 @@ function resetToy() {
 
         // Reset physics body
         rigidBodies.torso.setWorldTransform(transform);
-        rigidBodies.torso.setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
-        rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+        const zeroVec = ammoObjectPool.getVector(0, 0, 0);
+        rigidBodies.torso.setLinearVelocity(zeroVec);
+        rigidBodies.torso.setAngularVelocity(zeroVec);
+        ammoObjectPool.returnVector(zeroVec);
         rigidBodies.torso.clearForces();
         rigidBodies.torso.setActivationState(1); // ACTIVE_TAG to wake up
 
@@ -1232,8 +1303,10 @@ function resetToy() {
 
             // Reset physics body
             rigidBodies[name].setWorldTransform(transform);
-            rigidBodies[name].setLinearVelocity(new AmmoLib.btVector3(0, 0, 0));
-            rigidBodies[name].setAngularVelocity(new AmmoLib.btVector3(0, 0, 0));
+            const zeroVec = ammoObjectPool.getVector(0, 0, 0);
+            rigidBodies[name].setLinearVelocity(zeroVec);
+            rigidBodies[name].setAngularVelocity(zeroVec);
+            ammoObjectPool.returnVector(zeroVec);
             rigidBodies[name].clearForces();
             rigidBodies[name].setActivationState(1); // ACTIVE_TAG to wake up
 
@@ -1253,11 +1326,77 @@ function resetToy() {
     mouseMoving = false;
     currentRotationDirection = 1;
 
+    // Reset physics corruption detection
+    physicsFailureCount = 0;
+    lastPhysicsFailureTime = 0;
+
+    // Clear object pool to prevent stale references
+    ammoObjectPool.clear();
+
     // console.log('✅ Toy reset complete');
 }
 
-// Make reset function globally available
+// Recreate physics world on corruption
+function recreatePhysicsWorld() {
+    try {
+        console.log('🔄 Recreating physics world...');
+
+        // Store current state
+        const wasSpinning = mouseButtonDown;
+        const currentDirection = currentRotationDirection;
+        const currentMode = window.physicsMode;
+
+        // Clear existing physics objects from world (don't destroy them yet)
+        if (physicsWorld) {
+            // Remove all rigid bodies from world
+            Object.values(rigidBodies).forEach(body => {
+                if (body && typeof physicsWorld.removeRigidBody === 'function') {
+                    try {
+                        physicsWorld.removeRigidBody(body);
+                    } catch (e) {
+                        // Ignore errors during cleanup
+                    }
+                }
+            });
+
+            // Remove all constraints from world
+            Object.values(constraints).forEach(constraint => {
+                if (constraint && typeof physicsWorld.removeConstraint === 'function') {
+                    try {
+                        physicsWorld.removeConstraint(constraint);
+                    } catch (e) {
+                        // Ignore errors during cleanup
+                    }
+                }
+            });
+        }
+
+        // Clear object pools completely
+        ammoObjectPool.clear();
+
+        // Recreate physics world
+        initPhysics();
+
+        // Recreate all physics objects
+        createRigidBodies();
+        createConstraints();
+
+        // Restore state
+        window.physicsMode = currentMode;
+        updateSolverSettings();
+
+        console.log('✅ Physics world recreated successfully');
+
+    } catch (error) {
+        console.error('❌ Failed to recreate physics world:', error);
+        // Fallback to simple reset
+        window.resetToy();
+    }
+}
+
+// Make functions globally available
 window.resetToy = resetToy;
+window.recreatePhysicsWorld = recreatePhysicsWorld;
 
 // Mouse interaction variables
 const mouse = new THREE.Vector2();
@@ -1414,18 +1553,22 @@ function animate(currentTime = 0) {
                         const maxSpeed = window.physicsMode === 'elastic' ? 12.0 : 8.0;
                         if (speed > maxSpeed) { // Mode-dependent max speed
                             const scale = maxSpeed / speed;
-                            rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
+                            const scaledVel = ammoObjectPool.getVector(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
                                 angVel.z() * scale
-                            ));
+                            );
+                            rigidBodies.torso.setAngularVelocity(scaledVel);
+                            ammoObjectPool.returnVector(scaledVel);
                         }
                     }
 
                     // Apply torque for controlled spinning (mode-dependent)
-                    const baseTorque = window.physicsMode === 'elastic' ? 120.0 : 100.0;
+                    const baseTorque = window.physicsMode === 'elastic' ? 60.0 : 50.0; // Reduced for stability
                     const torque = baseTorque * currentRotationDirection;
-                    rigidBodies.torso.applyTorque(new AmmoLib.btVector3(0, torque, 0));
+                    const torqueVec = ammoObjectPool.getVector(0, torque, 0);
+                    rigidBodies.torso.applyTorque(torqueVec);
+                    ammoObjectPool.returnVector(torqueVec);
 
                     // Check immediately after calling
                     // setTimeout(() => {
@@ -1468,11 +1611,13 @@ function animate(currentTime = 0) {
                         const maxDecelSpeed = window.physicsMode === 'elastic' ? 15.0 : 10.0;
                         if (speed > maxDecelSpeed) { // Mode-dependent max deceleration speed
                             const scale = maxDecelSpeed / speed;
-                            rigidBodies.torso.setAngularVelocity(new AmmoLib.btVector3(
+                            const scaledVel = ammoObjectPool.getVector(
                                 angVel.x() * scale,
                                 angVel.y() * scale,
                                 angVel.z() * scale
-                            ));
+                            );
+                            rigidBodies.torso.setAngularVelocity(scaledVel);
+                            ammoObjectPool.returnVector(scaledVel);
                         }
                     }
 
@@ -1510,7 +1655,15 @@ function animate(currentTime = 0) {
                     return;
                 }
 
-                physicsWorld.stepSimulation(delta, 20); // Increased from 10 for better constraint stability
+                // Adaptive sub-step count based on activity to maintain stability while reducing load
+                let subSteps = 8; // Base count for stability
+                if (window.physicsMode === 'hinge') {
+                    subSteps = 12; // Higher for hinge mode stability
+                } else if (mouseButtonDown) {
+                    subSteps = 10; // Higher when actively spinning
+                }
+
+                physicsWorld.stepSimulation(delta, subSteps);
 
                 // DEBUG: Check if constraints are being processed
                 // if (frameCount % 120 === 0) {
@@ -1519,6 +1672,31 @@ function animate(currentTime = 0) {
             } catch (e) {
                 console.error('❌ Physics step failed:', e);
                 console.error('This may indicate physics engine corruption. Try resetting the toy.');
+
+                physicsFailureCount++;
+                const currentTime = performance.now();
+
+                // Check memory usage and pool stats
+                const poolStats = ammoObjectPool.getStats();
+                console.warn('📊 Memory stats:', poolStats);
+
+                // If failures are too frequent or memory pressure is high, recreate physics world
+                const shouldRecreate = physicsFailureCount >= MAX_PHYSICS_FAILURES ||
+                    (lastPhysicsFailureTime > 0 && currentTime - lastPhysicsFailureTime < 1000) ||
+                    poolStats.totalAllocations > 1000; // High allocation count indicates memory pressure
+
+                if (shouldRecreate) {
+                    console.error('🚨 Physics corruption/memory pressure detected. Recreating physics world...');
+                    recreatePhysicsWorld();
+                    physicsFailureCount = 0;
+                } else if (physicsFailureCount >= 3) {
+                    // Less severe - just reset the toy
+                    console.warn('⚠️ Physics instability detected. Resetting toy...');
+                    window.resetToy();
+                    physicsFailureCount = 0;
+                }
+
+                lastPhysicsFailureTime = currentTime;
                 return;
             }
 
@@ -1528,6 +1706,12 @@ function animate(currentTime = 0) {
             // Periodic check if sync is working
             if (frameCount % 120 === 0) { // Every 2 seconds
                 // console.log(`🔄 Physics sync active - frame ${frameCount}`);
+
+                // Monitor memory usage every 2 seconds
+                const poolStats = ammoObjectPool.getStats();
+                if (poolStats.totalAllocations > 500) {
+                    console.warn('⚠️ High memory usage detected:', poolStats);
+                }
             }
         }
 
@@ -1624,13 +1808,20 @@ function syncPhysicsToThree() {
             mesh.getWorldQuaternion(currentQuat);
 
             // Create transform for collider
-            const colliderTransform = new AmmoLib.btTransform();
+            const colliderTransform = ammoObjectPool.getTransform();
+            if (!colliderTransform) return;
+
             colliderTransform.setIdentity();
-            colliderTransform.setOrigin(new AmmoLib.btVector3(currentPos.x, currentPos.y, currentPos.z));
+            const originVec = ammoObjectPool.getVector(currentPos.x, currentPos.y, currentPos.z);
+            colliderTransform.setOrigin(originVec);
+            ammoObjectPool.returnVector(originVec);
             colliderTransform.setRotation(new AmmoLib.btQuaternion(currentQuat.x, currentQuat.y, currentQuat.z, currentQuat.w));
 
             // Update collider position (static bodies need manual transform updates)
             body.setWorldTransform(colliderTransform);
+
+            // Return transform to pool
+            ammoObjectPool.returnTransform(colliderTransform);
         });
     }
 
@@ -1662,12 +1853,17 @@ function syncPhysicsToThree() {
             }
 
             // Update pivot collider position
-            const pivotTransform = new AmmoLib.btTransform();
-            pivotTransform.setIdentity();
-            pivotTransform.setOrigin(new AmmoLib.btVector3(jointPos.x, jointPos.y, jointPos.z));
-            pivotTransform.setRotation(new AmmoLib.btQuaternion(0, 0, 0, 1)); // No rotation needed for spheres
+            const pivotTransform = ammoObjectPool.getTransform();
+            if (pivotTransform) {
+                pivotTransform.setIdentity();
+                const originVec = ammoObjectPool.getVector(jointPos.x, jointPos.y, jointPos.z);
+                pivotTransform.setOrigin(originVec);
+                ammoObjectPool.returnVector(originVec);
+                pivotTransform.setRotation(new AmmoLib.btQuaternion(0, 0, 0, 1)); // No rotation needed for spheres
 
-            pivotCollider.body.setWorldTransform(pivotTransform);
+                pivotCollider.body.setWorldTransform(pivotTransform);
+                ammoObjectPool.returnTransform(pivotTransform);
+            }
         });
     }
 
