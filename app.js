@@ -109,6 +109,24 @@ let physicsWorld;
 let rigidBodies = {};
 let constraints = {};
 
+// Ammo.js object pool to prevent WebAssembly memory corruption
+let ammoObjectPool = {
+    transforms: [],
+
+    getTransform: function() {
+        if (this.transforms.length > 0) {
+            return this.transforms.pop();
+        }
+        return new AmmoLib.btTransform();
+    },
+
+    returnTransform: function(transform) {
+        if (transform && this.transforms.length < 5) { // Limit pool size
+            this.transforms.push(transform);
+        }
+    }
+};
+
 // FAIL FAST SAFETY CHECKS
 function validatePhysicsAuthority() {
     if (!rigidBodies.torso) {
@@ -1552,13 +1570,8 @@ function syncPhysicsToThree() {
         return;
     }
 
-    let tmpTrans;
-    try {
-        tmpTrans = new AmmoLib.btTransform();
-    } catch (e) {
-        console.error('❌ Failed to create btTransform - physics engine corrupted:', e);
-        return;
-    }
+    // Get transform from object pool to prevent WebAssembly memory corruption
+    let tmpTrans = ammoObjectPool.getTransform();
 
     // Sync torso from physics to Three.js
     if (rigidBodies.torso && bodyMainRef) {
@@ -1706,6 +1719,10 @@ function syncPhysicsToThree() {
 
     // Anchor is kinematic and doesn't need syncing back to Three.js
     // (it only moves based on cursor input)
+
+    // Return transform to pool to prevent memory leaks
+    ammoObjectPool.returnTransform(tmpTrans);
+
     } catch (error) {
         console.error('❌ Physics sync error - skipping frame:', error.message);
         // Continue without crashing - physics corruption shouldn't break the app
