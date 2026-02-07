@@ -276,10 +276,13 @@
             <p>This work is built around that memory.<br>
             Not how the toy was designed to work, but how it survived.</p>
 
-            <h4>Modes (Planned / Experimental)</h4>
+            <h4>Modes</h4>
 
-            <p><strong>Elastic Mode (current)</strong><br>
-            Limbs respond dynamically to force, stretch under speed, and recover over time. Imperfect, organic, memory-based motion.</p>
+            <p><strong>🆕 New Toy (current)</strong><br>
+            Perfect mechanical hinges with rock-solid stability. Arms and legs stay precisely attached no matter how fast you spin. Modern, reliable, engineered motion.</p>
+
+            <p><strong>📻 Old Toy</strong><br>
+            Imperfect elastic connections that fatigue over time. Limbs stretch, drift, and momentarily detach at high speeds before returning. Organic, characterful, memory-based motion.</p>
 
             <p><strong>Rigid Mode (planned)</strong><br>
             A mechanically "correct" version with reinforced hinges and strict constraints, closer to a textbook simulation.</p>
@@ -387,8 +390,8 @@
 
     <!-- Mode selection buttons -->
     <div id="modeButtons" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 100;">
-        <button id="hingeModeBtn" style="padding: 10px 20px; background: rgba(255,0,0,0.9); color: white; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">🔗 Hinge</button>
-        <button id="elasticModeBtn" style="padding: 10px 20px; background: rgba(100,100,100,0.8); color: white; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">🌊 Elastic</button>
+        <button id="newToyBtn" style="padding: 10px 20px; background: rgba(255,0,0,0.9); color: white; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">🆕 New Toy</button>
+        <button id="oldToyBtn" style="padding: 10px 20px; background: rgba(100,100,100,0.8); color: white; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">📻 Old Toy</button>
     </div>
 
 
@@ -485,10 +488,10 @@
             }
 
             // Mode switching functionality
-            const hingeModeBtn = document.getElementById('hingeModeBtn');
-            const elasticModeBtn = document.getElementById('elasticModeBtn');
+            const newToyBtn = document.getElementById('newToyBtn');
+            const oldToyBtn = document.getElementById('oldToyBtn');
 
-            // Set default mode to hinge
+            // Set default mode to new toy (hinge)
             window.physicsMode = 'hinge';
 
             function setActiveMode(mode) {
@@ -496,15 +499,15 @@
 
                 // Update button styles
                 if (mode === 'hinge') {
-                    hingeModeBtn.style.background = 'rgba(255,0,0,0.9)';
-                    hingeModeBtn.style.borderColor = 'rgba(255,255,255,0.5)';
-                    elasticModeBtn.style.background = 'rgba(100,100,100,0.8)';
-                    elasticModeBtn.style.borderColor = 'rgba(255,255,255,0.3)';
+                    newToyBtn.style.background = 'rgba(255,0,0,0.9)';
+                    newToyBtn.style.borderColor = 'rgba(255,255,255,0.5)';
+                    oldToyBtn.style.background = 'rgba(100,100,100,0.8)';
+                    oldToyBtn.style.borderColor = 'rgba(255,255,255,0.3)';
                 } else {
-                    elasticModeBtn.style.background = 'rgba(0,150,255,0.9)';
-                    elasticModeBtn.style.borderColor = 'rgba(255,255,255,0.5)';
-                    hingeModeBtn.style.background = 'rgba(100,100,100,0.8)';
-                    hingeModeBtn.style.borderColor = 'rgba(255,255,255,0.3)';
+                    oldToyBtn.style.background = 'rgba(0,150,255,0.9)';
+                    oldToyBtn.style.borderColor = 'rgba(255,255,255,0.5)';
+                    newToyBtn.style.background = 'rgba(100,100,100,0.8)';
+                    newToyBtn.style.borderColor = 'rgba(255,255,255,0.3)';
                 }
 
                 // console.log(`🔄 Switched to ${mode} mode`);
@@ -532,18 +535,18 @@
                 };
             }
 
-            hingeModeBtn.addEventListener('click', handleModeSwitch('hinge'));
-            elasticModeBtn.addEventListener('click', handleModeSwitch('elastic'));
+            newToyBtn.addEventListener('click', handleModeSwitch('hinge'));
+            oldToyBtn.addEventListener('click', handleModeSwitch('elastic'));
 
             // Mobile touch support for mode buttons
-            hingeModeBtn.addEventListener('touchend', function(event) {
+            newToyBtn.addEventListener('touchend', function(event) {
                 const touchDuration = event.timeStamp - (event.changedTouches[0].startTime || 0);
                 if (touchDuration < 300) {
                     handleModeSwitch('hinge')(event);
                 }
             });
 
-            elasticModeBtn.addEventListener('touchend', function(event) {
+            oldToyBtn.addEventListener('touchend', function(event) {
                 const touchDuration = event.timeStamp - (event.changedTouches[0].startTime || 0);
                 if (touchDuration < 300) {
                     handleModeSwitch('elastic')(event);
